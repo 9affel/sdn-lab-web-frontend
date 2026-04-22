@@ -1,4 +1,5 @@
 ﻿import clsx from "clsx";
+import PropTypes from 'prop-types';
 
 export default function Input({
   size = "md",
@@ -27,3 +28,10 @@ export default function Input({
     />
   );
 }
+
+Input.propTypes = {
+  size: PropTypes.oneOf(['sm', 'md', 'lg']),
+  error: PropTypes.bool,
+  disabled: PropTypes.bool,
+  className: PropTypes.string,
+};

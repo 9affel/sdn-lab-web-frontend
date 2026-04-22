@@ -1,19 +1,18 @@
-﻿import React from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
-  Eye,
-  Radio,
+  Zap,
   Network,
   TrendingUp,
-  Zap,
+  Cpu,
+  HardDrive,
+  Shield,
+  Brain,
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -23,78 +22,150 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
-import { useStatusPolling } from "../hooks/useStatusPolling";
+import { getDashboardMetrics, getMetricsHistory } from "../api/services";
+import { COLORS } from "../design-system/constants";
 
-// Chart data
-const weeklyActivityData = [
-  { day: "Mon", value: 12 },
-  { day: "Tue", value: 18 },
-  { day: "Wed", value: 8 },
-  { day: "Thu", value: 16 },
-  { day: "Fri", value: 22 },
-  { day: "Sat", value: 10 },
-  { day: "Sun", value: 6 },
-];
-
-const threatDistributionData = [
-  { name: "Phishing", value: 45 },
-  { name: "Malware", value: 25 },
-  { name: "Trackers", value: 20 },
-  { name: "Other", value: 10 },
-];
-
-// Colors for pie chart
-const PIE_COLORS = {
-  Phishing: "#E74C3C",
-  Malware: "#F5A623",
-  Trackers: "#00D9C0",
-  Other: "#6B7280",
+const CustomTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-primary border rounded-lg p-3 shadow-lg" style={{ borderColor: COLORS.accent.cyan + '40' }}>
+        {payload.map((entry, index) => (
+          <div key={index} style={{ color: entry.color }} className="text-sm">
+            {entry.name}: {entry.value.toFixed(2)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
 };
 
 export default function Dashboard() {
-  const { status, attackCount, totalLogs, recentLogs, loading } =
-    useStatusPolling();
+  const [metrics, setMetrics] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [metricsRes, historyRes] = await Promise.all([
+          getDashboardMetrics(),
+          getMetricsHistory(24, 5),
+        ]);
+
+        setMetrics(metricsRes.data);
+
+        // Format history for chart
+        const chartData = (historyRes.data || []).map((item) => ({
+          timestamp: new Date(item.timestamp).toLocaleTimeString(),
+          pps: Math.round(item.pps),
+          bytes_per_sec: Math.round((item.bytes_per_sec / 1024 / 1024) * 10) / 10,
+          attacks_detected: item.attacks_detected,
+          attacks_blocked: item.attacks_blocked,
+        }));
+
+        setHistory(chartData);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching metrics:", err);
+        setError("Failed to load dashboard metrics");
+        // Use mock data for development
+        setMetrics({
+          timestamp: new Date().toISOString(),
+          network: {
+            packet_rate_pps: 65536,
+            byte_rate_mbps: 450,
+            active_flows: 45,
+            port_utilization: 0.65,
+          },
+          security: {
+            attacks_detected_hour: 12,
+            attacks_blocked_hour: 12,
+            defense_success_rate: 100,
+            avg_response_time_ms: 0.5,
+          },
+          ai: {
+            predictions_per_second: 1000,
+            decision_latency_ms: 0.3,
+            risk_model_accuracy: 0.8607,
+            rl_avg_reward: 19.9,
+          },
+          system: {
+            cpu_usage_percent: 24.5,
+            memory_usage_mb: 512,
+          },
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading && !metrics) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!metrics) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-red-400">Failed to load metrics</p>
+      </div>
+    );
+  }
 
   const statCards = [
     {
-      title: "Threats Blocked",
-      value: "1,247",
-      subtitle: "+12% from last week",
-      icon: AlertTriangle,
-      cardClass: "card-red",
-      textColor: "text-red",
-      bgColor: "bg-red-dark/20",
-      borderColor: "border-red/30",
-    },
-    {
-      title: "Privacy Score",
-      value: "98%",
-      subtitle: "Excellent protection",
-      icon: Eye,
-      cardClass: "card-green",
-      textColor: "text-green",
-      bgColor: "bg-green/20",
-      borderColor: "border-green/30",
-    },
-    {
-      title: "Sites Scanned",
-      value: "3,451",
-      subtitle: "This month",
+      title: "Network Throughput",
+      value: `${metrics.network.packet_rate_pps.toLocaleString()} pps`,
+      subtitle: `${metrics.network.byte_rate_mbps} MB/s`,
       icon: Network,
-      cardClass: "card-cyan",
-      textColor: "text-cyan",
-      bgColor: "bg-cyan/20",
-      borderColor: "border-cyan/30",
+      color: "from-blue-600 to-blue-400",
+      bgColor: "bg-blue-500/10",
+      textColor: "text-blue-400",
+      borderColor: "border-blue-500/30",
     },
     {
-      title: "Active Protection",
-      value: "24/7",
-      subtitle: "All services running",
-      icon: Zap,
-      cardClass: "card-amber",
-      textColor: "text-amber",
-      bgColor: "bg-amber/20",
-      borderColor: "border-amber/30",
+      title: "Security",
+      value: `${metrics.security.attacks_blocked_hour}/${metrics.security.attacks_detected_hour}`,
+      subtitle: `${metrics.security.defense_success_rate.toFixed(0)}% Success Rate`,
+      icon: Shield,
+      color: "from-green-600 to-green-400",
+      bgColor: "bg-green-500/10",
+      textColor: "text-green-400",
+      borderColor: "border-green-500/30",
+    },
+    {
+      title: "AI Engine",
+      value: `${metrics.ai.predictions_per_second.toLocaleString()} pred/s`,
+      subtitle: `${(metrics.ai.decision_latency_ms * 1000).toFixed(1)}µs latency`,
+      icon: Brain,
+      color: "from-purple-600 to-purple-400",
+      bgColor: "bg-purple-500/10",
+      textColor: "text-purple-400",
+      borderColor: "border-purple-500/30",
+    },
+    {
+      title: "System Health",
+      value: `${metrics.system.cpu_usage_percent.toFixed(1)}% CPU`,
+      subtitle: `${Math.round(metrics.system.memory_usage_mb)}MB RAM`,
+      icon: Cpu,
+      color: "from-cyan-600 to-cyan-400",
+      bgColor: "bg-cyan-500/10",
+      textColor: "text-cyan-400",
+      borderColor: "border-cyan-500/30",
     },
   ];
 
@@ -102,209 +173,150 @@ export default function Dashboard() {
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-heading-lg text-text-primary mb-1">Dashboard</h1>
-        <p className="text-text-secondary">Real-time protection and monitoring</p>
+        <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
+        <p className="text-slate-400">
+          Real-time SDN-EDR metrics and threat monitoring
+        </p>
       </div>
 
-      {/* KPI Cards Grid - 1x4 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((card, idx) => {
           const Icon = card.icon;
           return (
-            <div
+            <Card
               key={card.title}
-              className={`${card.cardClass} p-6 rounded-2xl hover-lift group cursor-pointer border-l-4 transition-all duration-300`}
-              style={{
-                borderLeftColor:
-                  card.cardClass === "card-red"
-                    ? "#E74C3C"
-                    : card.cardClass === "card-green"
-                      ? "#0A4A3F"
-                      : card.cardClass === "card-cyan"
-                        ? "#00D9C0"
-                        : "#F5A623",
-                animationDelay: `${idx * 50}ms`,
-              }}
+              className={`border ${card.borderColor} group hover:border-opacity-100 transition-all duration-300`}
             >
-              {/* Card Content */}
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-label text-text-secondary mb-2 uppercase">
-                      {card.title}
-                    </p>
-                    <p className={`text-5xl font-bold ${card.textColor}`}>
-                      {card.value}
-                    </p>
-                  </div>
-                  <div
-                    className={`w-12 h-12 rounded-lg ${card.bgColor} border ${card.borderColor} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}
-                  >
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className={`p-3 rounded-lg ${card.bgColor}`}>
                     <Icon className={`w-6 h-6 ${card.textColor}`} />
                   </div>
+                  <Badge className="bg-slate-700 text-slate-300">Now</Badge>
                 </div>
-                <p className="text-text-secondary text-sm">{card.subtitle}</p>
-              </div>
-            </div>
+
+                <div className="space-y-2">
+                  <p className="text-slate-400 text-sm font-medium">{card.title}</p>
+                  <p className={`text-2xl font-bold ${card.textColor}`}>
+                    {card.value}
+                  </p>
+                  <p className="text-slate-500 text-xs">{card.subtitle}</p>
+                </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
-      {/* Charts Section - 2 cols */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Weekly Activity Chart */}
-        <Card variant="cyan" className="hover-lift">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-cyan" />
-                Weekly Activity
-              </CardTitle>
-              <Badge variant="cyan">Live</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div style={{ width: "100%", height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weeklyActivityData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="day" stroke="#6B7280" />
-                  <YAxis stroke="#6B7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "rgba(15, 20, 32, 0.95)",
-                      border: "1px solid rgba(0, 217, 192, 0.3)",
-                      borderRadius: "8px",
-                    }}
-                    labelStyle={{ color: "#00D9C0" }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#00D9C0"
-                    strokeWidth={3}
-                    dot={{ fill: "#00D9C0", r: 5 }}
-                    activeDot={{ r: 7 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+      {/* Main Area Chart */}
+      <Card className="border-blue-500/20">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-blue-400" />
+              Network Performance (24h)
+            </CardTitle>
+            <Badge className="bg-blue-500/20 text-blue-400">Real-time</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div style={{ width: "100%", height: 350 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={history} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="ppsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="bytesGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis
+                  dataKey="timestamp"
+                  stroke="#64748b"
+                  style={{ fontSize: "12px" }}
+                />
+                <YAxis stroke="#64748b" style={{ fontSize: "12px" }} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="pps"
+                  stroke="#3b82f6"
+                  fillOpacity={1}
+                  fill="url(#ppsGradient)"
+                  name="Packets/sec"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="bytes_per_sec"
+                  stroke="#10b981"
+                  fillOpacity={1}
+                  fill="url(#bytesGradient)"
+                  name="MB/s"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="border-green-500/20">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-green-500/10">
+                <Shield className="w-6 h-6 text-green-400" />
+              </div>
+              <div>
+                <p className="text-slate-400 text-sm">Attacks Blocked</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {metrics.security.attacks_blocked_hour}%
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Threat Distribution */}
-        <Card variant="amber" className="hover-lift">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Radio className="w-5 h-5 text-amber" />
-              Threat Distribution
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center">
-              <div style={{ width: "100%", height: 260, display: "flex", justifyContent: "center" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={threatDistributionData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {threatDistributionData.map((entry) => (
-                        <Cell key={`cell-${entry.name}`} fill={PIE_COLORS[entry.name]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "rgba(15, 20, 32, 0.95)",
-                        border: "1px solid rgba(245, 166, 35, 0.3)",
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+        <Card className="border-purple-500/20">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-purple-500/10">
+                <Brain className="w-6 h-6 text-purple-400" />
               </div>
+              <div>
+                <p className="text-slate-400 text-sm">Model Accuracy</p>
+                <p className="text-2xl font-bold text-purple-400">
+                  {(metrics.ai.risk_model_accuracy * 100).toFixed(1)}%
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-              {/* Legend */}
-              <div className="w-full mt-6 space-y-2">
-                {threatDistributionData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: PIE_COLORS[item.name] }}
-                      ></div>
-                      <span className="text-text-primary text-sm">{item.name}</span>
-                    </div>
-                    <span className="text-text-secondary text-sm font-semibold">
-                      {item.value}%
-                    </span>
-                  </div>
-                ))}
+        <Card className="border-cyan-500/20">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-cyan-500/10">
+                <Zap className="w-6 h-6 text-cyan-400" />
+              </div>
+              <div>
+                <p className="text-slate-400 text-sm">Response Time</p>
+                <p className="text-2xl font-bold text-cyan-400">
+                  {metrics.security.avg_response_time_ms.toFixed(2)}ms
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Recent Activity - Full Width */}
-      <Card variant="cyan" className="hover-lift">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-cyan" />
-              Recent Activity
-            </CardTitle>
-            <Badge variant="cyan">{recentLogs?.length || 0} Events</Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {recentLogs && recentLogs.length > 0 ? (
-              recentLogs.slice(0, 5).map((log, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-lg border border-border-light hover:border-cyan/50 hover:bg-cyan/5 transition-all duration-300 group"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className="w-2 h-2 rounded-full bg-cyan mt-1.5 flex-shrink-0 animate-glow-pulse"></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-text-primary group-hover:text-cyan transition-colors">
-                          {log.threat_level?.toUpperCase() || "INFO"}
-                        </p>
-                        <p className="text-xs text-text-muted font-mono truncate mt-0.5">
-                          {log.source_ip} → {log.dest_ip}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={
-                        log.threat_level === "critical"
-                          ? "red"
-                          : log.threat_level === "warning"
-                            ? "amber"
-                            : "green"
-                      }
-                    >
-                      {log.threat_level || "low"}
-                    </Badge>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-12">
-                <Activity className="w-8 h-8 text-text-muted/30 mx-auto mb-3" />
-                <p className="text-text-muted">No recent activity</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

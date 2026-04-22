@@ -1,4 +1,6 @@
-﻿export function Card({ variant = "base", className = "", children, ...props }) {
+﻿import PropTypes from 'prop-types';
+
+export function Card({ variant = "base", className = "", children, ...props }) {
   const variantClasses = {
     base: "card-base",
     cyan: "card-cyan",
@@ -14,6 +16,12 @@
   );
 }
 
+Card.propTypes = {
+  variant: PropTypes.oneOf(['base', 'cyan', 'green', 'red', 'amber']),
+  className: PropTypes.string,
+  children: PropTypes.node.isRequired,
+};
+
 export function CardHeader({ className = "", children, ...props }) {
   return (
     <div className={`mb-4 pb-4 border-b border-border-light ${className}`} {...props}>
@@ -21,6 +29,11 @@ export function CardHeader({ className = "", children, ...props }) {
     </div>
   );
 }
+
+CardHeader.propTypes = {
+  className: PropTypes.string,
+  children: PropTypes.node.isRequired,
+};
 
 export function CardTitle({ className = "", children, ...props }) {
   return (
@@ -30,6 +43,11 @@ export function CardTitle({ className = "", children, ...props }) {
   );
 }
 
+CardTitle.propTypes = {
+  className: PropTypes.string,
+  children: PropTypes.node.isRequired,
+};
+
 export function CardContent({ className = "", children, ...props }) {
   return (
     <div className={`${className}`} {...props}>
@@ -37,3 +55,8 @@ export function CardContent({ className = "", children, ...props }) {
     </div>
   );
 }
+
+CardContent.propTypes = {
+  className: PropTypes.string,
+  children: PropTypes.node,
+};

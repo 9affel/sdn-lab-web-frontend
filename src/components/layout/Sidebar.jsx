@@ -11,6 +11,8 @@ import {
   Shield,
   TrendingUp,
   Eye,
+  Layers,
+  Brain,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -19,13 +21,10 @@ export default function Sidebar() {
 
   const navItems = [
     { label: "Dashboard", icon: LayoutDashboard, path: "/" },
-    { label: "Network Log", icon: Activity, path: "/threats" },
-    { label: "Extension", icon: Shield, path: "/extension" },
-    { label: "Risk Overlay", icon: Eye, path: "/network" },
-    { label: "Risk Analysis", icon: TrendingUp, path: "/analysis" },
-    { label: "Privacy Shield", icon: Shield, path: "/privacy" },
-    { label: "Threat History", icon: Activity, path: "/history" },
-    { label: "Breach Check", icon: Shield, path: "/breach" },
+    { label: "Threat Intelligence", icon: Activity, path: "/threats" },
+    { label: "Network Topology", icon: Network, path: "/network" },
+    { label: "Flow Inspector", icon: Layers, path: "/flows" },
+    { label: "AI Model Lab", icon: Brain, path: "/ai-lab" },
     { label: "Settings", icon: Settings, path: "/settings" },
   ];
 

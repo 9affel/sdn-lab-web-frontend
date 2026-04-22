@@ -1,4 +1,5 @@
 ﻿import clsx from "clsx";
+import PropTypes from 'prop-types';
 
 function Badge({ variant = "info", children, className = "", ...props }) {
   const variants = {
@@ -21,6 +22,12 @@ function Badge({ variant = "info", children, className = "", ...props }) {
     </span>
   );
 }
+
+Badge.propTypes = {
+  variant: PropTypes.oneOf(['cyan', 'green', 'red', 'amber', 'info', 'success', 'danger', 'warning']),
+  children: PropTypes.node.isRequired,
+  className: PropTypes.string,
+};
 
 export { Badge };
 export default Badge;

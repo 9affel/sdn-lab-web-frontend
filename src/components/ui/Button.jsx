@@ -1,4 +1,5 @@
 ﻿import clsx from "clsx";
+import PropTypes from 'prop-types';
 
 function Button({
   variant = "primary",
@@ -36,6 +37,14 @@ function Button({
     </button>
   );
 }
+
+Button.propTypes = {
+  variant: PropTypes.oneOf(['primary', 'secondary', 'ghost']),
+  size: PropTypes.oneOf(['sm', 'md', 'lg']),
+  disabled: PropTypes.bool,
+  className: PropTypes.string,
+  children: PropTypes.node.isRequired,
+};
 
 export { Button };
 export default Button;
