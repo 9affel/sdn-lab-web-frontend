@@ -14,6 +14,8 @@ import { Badge } from '../components/ui/Badge';
 import { getAttacks, getAttackSummary, generateMockAttacks } from '../api/services';
 import { COLORS, STATUS_COLOR_MAP } from '../design-system/constants';
 import { useStatusColor } from '../design-system/hooks';
+import useWebSocket from '../hooks/useWebSocket';
+import { wsUrl } from '../api/websocket';
 
 export default function ThreatLogs() {
   const [attacks, setAttacks] = useState([]);
@@ -56,6 +58,39 @@ export default function ThreatLogs() {
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Live Pulse: stream new attacks into the table head + raise a toast.
+  useWebSocket(wsUrl('attacks'), {
+    onMessage: (msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      // Server payload shape: { type: 'attack_detected', attack: {...}, timestamp }
+      // or, for a fully expanded ingest broadcast, the attack fields are at top
+      // level. Support both.
+      const attack = msg.attack && typeof msg.attack === 'object' ? msg.attack : msg;
+      if (!attack.type && !attack.severity) return;
+
+      setAttacks((prev) => {
+        const id = attack.id || attack.attack_id;
+        if (id && prev.some((a) => (a.id || a.attack_id) === id)) {
+          return prev;
+        }
+        return [attack, ...prev].slice(0, 200);
+      });
+
+      window.dispatchEvent(
+        new CustomEvent('sdn:toast', {
+          detail: {
+            title: `${attack.severity?.toUpperCase?.() || 'ALERT'} · ${attack.type || 'Attack'}`,
+            message: attack.source_ip
+              ? `From ${attack.source_ip} → ${attack.destination_ip || '?'}`
+              : 'Live attack event received',
+            severity: attack.severity || 'high',
+            id: attack.id || attack.attack_id,
+          },
+        }),
+      );
+    },
+  });
 
   const getSeverityColor = (severity) => {
     const color = useStatusColor(severity);

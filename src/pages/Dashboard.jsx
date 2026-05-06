@@ -24,6 +24,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { Badge } from "../components/ui/Badge";
 import { getDashboardMetrics, getMetricsHistory } from "../api/services";
 import { COLORS } from "../design-system/constants";
+import useWebSocket from "../hooks/useWebSocket";
+import { wsUrl } from "../api/websocket";
 
 const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
@@ -106,6 +108,50 @@ export default function Dashboard() {
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Live Pulse: subscribe to /ws/metrics for real-time chart updates.
+  useWebSocket(wsUrl("metrics"), {
+    onMessage: (msg) => {
+      if (!msg || typeof msg !== "object") return;
+      // The ingest broadcaster wraps payloads as { type: "metrics_update", ... }
+      const pps = Number(msg.packet_rate_pps ?? msg.pps ?? 0);
+      const bytesPerSec = Number(msg.byte_rate_bps ?? msg.bytes_per_sec ?? 0);
+      if (!Number.isFinite(pps) && !Number.isFinite(bytesPerSec)) return;
+      const point = {
+        timestamp: new Date(msg.timestamp || Date.now()).toLocaleTimeString(),
+        pps: Math.round(pps),
+        bytes_per_sec: Math.round((bytesPerSec / 1024 / 1024) * 10) / 10,
+        attacks_detected: Number(msg.attacks_detected_hour ?? 0),
+        attacks_blocked: Number(msg.attacks_blocked_hour ?? 0),
+      };
+      setHistory((prev) => {
+        const next = [...prev, point];
+        return next.length > 120 ? next.slice(next.length - 120) : next;
+      });
+      setMetrics((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          timestamp: msg.timestamp || prev.timestamp,
+          network: {
+            ...prev.network,
+            packet_rate_pps: pps || prev.network.packet_rate_pps,
+            byte_rate_mbps: bytesPerSec
+              ? Math.round((bytesPerSec / 1_000_000) * 10) / 10
+              : prev.network.byte_rate_mbps,
+            active_flows: msg.active_flows ?? prev.network.active_flows,
+          },
+          system: {
+            ...prev.system,
+            cpu_usage_percent:
+              msg.cpu_usage_percent ?? prev.system.cpu_usage_percent,
+            memory_usage_mb:
+              msg.memory_usage_mb ?? prev.system.memory_usage_mb,
+          },
+        };
+      });
+    },
+  });
 
   if (loading && !metrics) {
     return (

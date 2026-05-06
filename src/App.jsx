@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { MainLayout } from './components/layout/MainLayout';
+import ToastContainer from './components/ui/ToastContainer';
 import Dashboard from './pages/Dashboard';
 import ThreatLogs from './pages/ThreatLogs';
 import NetworkMap from './pages/NetworkMap';
@@ -15,6 +16,7 @@ import Login from './pages/Login';
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         {/* Auth — standalone layout */}
         <Route path="/login" element={<Login />} />
