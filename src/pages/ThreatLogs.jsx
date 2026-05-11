@@ -14,6 +14,7 @@ import { Badge } from '../components/ui/Badge';
 import { getAttacks, getAttackSummary, generateMockAttacks } from '../api/services';
 import { COLORS, STATUS_COLOR_MAP } from '../design-system/constants';
 import { useStatusColor } from '../design-system/hooks';
+import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
 
 export default function ThreatLogs() {
   const [attacks, setAttacks] = useState([]);
@@ -22,6 +23,8 @@ export default function ThreatLogs() {
   const [expandedRow, setExpandedRow] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
+
+  const { data: wsAttackData, status: wsStatus } = useSDNWebSocket('/attacks');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,17 +56,67 @@ export default function ThreatLogs() {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const getSeverityColor = (severity) => {
-    const color = useStatusColor(severity);
-    return {
-      bg: color.bg,
-      text: color.text,
-      border: color.border,
+    // Revert to 5s polling only if WS is not open
+    let interval;
+    if (wsStatus !== 'OPEN') {
+      const pollInterval = import.meta.env.VITE_LOGS_POLL_INTERVAL || 10000;
+      interval = setInterval(fetchData, pollInterval);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
     };
+  }, [wsStatus]);
+
+  useEffect(() => {
+    if (wsAttackData) {
+      // Backend uses "attack_detected" or "attack_resolved" for type
+      if (wsAttackData.type === 'attack_detected' && wsAttackData.attack) {
+        // Append new attack to the top of the list
+        setAttacks((prev) => [wsAttackData.attack, ...prev].slice(0, 100));
+      } else if (wsAttackData.type === 'summary') {
+        setSummary(wsAttackData.data);
+      }
+      setLoading(false);
+    }
+  }, [wsAttackData]);
+
+  const filteredAttacks = attacks.filter((attack) => {
+    const matchesSearch =
+      attack.source_ip?.includes(searchTerm) ||
+      attack.destination_ip?.includes(searchTerm) ||
+      attack.type?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSeverity =
+      severityFilter === 'all' || attack.severity?.toLowerCase() === severityFilter;
+    return matchesSearch && matchesSeverity;
+  });
+
+  const getSeverityStyle = (severity) => {
+    const status = severity?.toLowerCase() || 'cyan';
+    const colorKey = STATUS_COLOR_MAP[status] || 'cyan';
+    
+    const colorMap = {
+      red: {
+        bg: 'rgba(231, 76, 60, 0.08)',
+        border: 'rgba(231, 76, 60, 0.3)',
+        text: '#E74C3C',
+      },
+      green: {
+        bg: 'rgba(10, 74, 63, 0.15)',
+        border: 'rgba(10, 74, 63, 0.4)',
+        text: '#0A4A3F',
+      },
+      amber: {
+        bg: 'rgba(245, 166, 35, 0.08)',
+        border: 'rgba(245, 166, 35, 0.3)',
+        text: '#F5A623',
+      },
+      cyan: {
+        bg: 'rgba(0, 217, 192, 0.08)',
+        border: 'rgba(0, 217, 192, 0.3)',
+        text: '#00D9C0',
+      },
+    };
+    return colorMap[colorKey] || colorMap.cyan;
   };
 
   if (loading && !attacks.length) {
@@ -228,7 +281,7 @@ export default function ThreatLogs() {
               <tbody>
                 {filteredAttacks.length > 0 ? (
                   filteredAttacks.map((attack) => {
-                    const color = useStatusColor(attack.severity);
+                    const color = getSeverityStyle(attack.severity);
                     return (
                       <React.Fragment key={attack.id}>
                         <tr
@@ -380,10 +433,10 @@ export default function ThreatLogs() {
                               </div>
                             </div>
 
-                            {/* 71-Feature Summary */}
+                            {/* 17-Feature Summary */}
                             <div className="mt-4 pt-4 border-t border-border">
                               <p className="text-xs text-tertiary mb-2">
-                                Note: Full 71-feature vector available in
+                                Note: Full 17-feature vector available in
                                 backend. Summary shown above.
                               </p>
                             </div>

@@ -106,7 +106,7 @@ export const getModels = () => api.get('/api/v1/models');
 /**
  * Get risk ML model predictions
  * POST /api/v1/models/predict
- * @param {Array<number>} features - 64-element feature vector
+ * @param {Array<number>} features - 17-element network feature vector (XGBoost)
  * @param {string} flowKey - Flow identifier
  */
 export const predictRisk = (features, flowKey) =>
@@ -115,7 +115,7 @@ export const predictRisk = (features, flowKey) =>
 /**
  * Get RL agent decision
  * POST /api/v1/models/decide
- * @param {Array<number>} networkFeatures - 64-element network feature vector
+ * @param {Array<number>} networkFeatures - 17-element network feature vector
  * @param {Array<number>} riskProbs - 8-element risk probability vector
  * @param {string} flowKey - Flow identifier
  */
@@ -125,6 +125,18 @@ export const decideAction = (networkFeatures, riskProbs, flowKey) =>
     risk_probs: riskProbs,
     flow_key: flowKey,
   });
+
+/**
+ * Get AI inference latency history for charting
+ * GET /api/v1/models/latency-history
+ */
+export const getLatencyHistory = () => api.get('/api/v1/models/latency-history');
+
+/**
+ * Get RL action distribution counters
+ * GET /api/v1/models/action-distribution
+ */
+export const getActionDistribution = () => api.get('/api/v1/models/action-distribution');
 
 /**
  * ========================
@@ -137,45 +149,6 @@ export const decideAction = (networkFeatures, riskProbs, flowKey) =>
  * GET /api/v1/health
  */
 export const getHealth = () => api.get('/api/v1/health');
-
-/**
- * ========================
- * LEGACY COMPATIBILITY
- * ========================
- */
-
-/**
- * Fetch current security status and recent logs.
- * GET /api/status/
- * Returns: { status, most_recent_log, last_5_logs, attack_count, total_logs }
- */
-export const getStatus = () => api.get('/api/status/');
-
-/**
- * Fetch all security logs (paginated).
- * GET /api/logs/
- */
-export const getLogs = (params = {}) => api.get('/api/logs/', { params });
-
-/**
- * Submit a new security log entry.
- * POST /api/logs/
- */
-export const postLog = (data) => api.post('/api/logs/', data);
-
-/**
- * Fetch logs filtered by specific parameters.
- * Supports: source_ip, dest_ip, is_attack, threat_level, protocol
- */
-export const getFilteredLogs = (filters) => {
-  const params = {};
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      params[key] = value;
-    }
-  });
-  return api.get('/api/logs/', { params });
-};
 
 /**
  * ========================

@@ -102,12 +102,20 @@ export default function NetworkMap() {
     );
   }
 
-  // Simulate simple grid layout for switch visualization
-  const switchPositions = {
-    s1: { x: 200, y: 150 },
-    s2: { x: 600, y: 150 },
-    s3: { x: 400, y: 350 },
-  };
+  // Calculate dynamic positions for switches in a circular layout
+  const switchPositions = {};
+  if (topology.switches) {
+    const radius = 180;
+    const centerX = 400;
+    const centerY = 250;
+    topology.switches.forEach((sw, idx) => {
+      const angle = (idx / topology.switches.length) * 2 * Math.PI - Math.PI / 2;
+      switchPositions[sw.id] = {
+        x: centerX + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle)
+      };
+    });
+  }
 
   const selectedSwitchData = topology.switches?.find(
     (s) => s.id === selectedSwitch

@@ -1,10 +1,8 @@
-﻿import { Outlet } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
-import { useStatusPolling } from "../../hooks/useStatusPolling";
 
 export function MainLayout() {
-  const { status, attackCount } = useStatusPolling(5000);
 
   return (
     <div className="min-h-screen bg-primary">
