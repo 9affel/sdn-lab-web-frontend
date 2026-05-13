@@ -292,15 +292,24 @@ export default function ThreatLogs() {
                             )
                           }
                         >
-                          <td className="px-4 py-3 text-sm text-tertiary">
-                            {new Date(attack.timestamp).toLocaleTimeString()}
+                          <td className="px-4 py-3 text-sm text-tertiary whitespace-nowrap">
+                            {(() => {
+                              const d = new Date(attack.timestamp);
+                              const isValid = !isNaN(d.getTime());
+                              if (!isValid) return attack.timestamp || '—';
+                              return d.toLocaleString(undefined, {
+                                month: 'short', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                                hour12: false,
+                              });
+                            })()}
                           </td>
                           <td className="px-4 py-3 text-sm font-mono">
                             <div className="text-cyan truncate max-w-xs">
-                              {attack.source_ip}
+                              {attack.source_ip || attack.src_ip || '—'}
                             </div>
                             <div className="text-muted truncate max-w-xs">
-                              → {attack.destination_ip}
+                              → {attack.destination_ip || attack.dst_ip || '—'}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-tertiary">
