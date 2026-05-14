@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { getAttacks, getAttackSummary, generateMockAttacks } from '../api/services';
+import { getAttacks, getAttackSummary } from '../api/services';
 import { COLORS, STATUS_COLOR_MAP } from '../design-system/constants';
 import { useStatusColor } from '../design-system/hooks';
 import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
@@ -23,6 +23,7 @@ export default function ThreatLogs() {
   const [expandedRow, setExpandedRow] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
+  const [error, setError] = useState(null);
 
   const { data: wsAttackData, status: wsStatus } = useSDNWebSocket('/attacks');
 
@@ -39,17 +40,9 @@ export default function ThreatLogs() {
         setSummary(summaryRes.data || null);
       } catch (err) {
         console.error('Error fetching threat data:', err);
-        // Use mock data
-        setAttacks(generateMockAttacks());
-        setSummary({
-          total_attacks: 47,
-          blocked: 47,
-          success_rate: 100,
-          response_time_avg_ms: 0.8,
-          peak_pps: 1250000,
-          attack_types: { DDoS: 18, Scan: 12, Exploit: 10, Anomaly: 7 },
-          actions_taken: { block: 40, rate_limit: 5, reroute: 2 },
-        });
+        setError('Failed to load threat data');
+        setAttacks([]);
+        setSummary(null);
       } finally {
         setLoading(false);
       }
@@ -119,12 +112,23 @@ export default function ThreatLogs() {
     return colorMap[colorKey] || colorMap.cyan;
   };
 
-  if (loading && !attacks.length) {
+  if (loading && !attacks.length && !error) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: COLORS.status.danger + '40', borderTopColor: COLORS.status.danger }}></div>
           <p className="text-secondary">Loading threat data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !attacks.length) {
+    return (
+      <div className="text-center py-12">
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-lg inline-block">
+          <p className="font-semibold">⚠️ {error}</p>
+          <p className="text-sm mt-1 opacity-80">Check backend connectivity or Ryu controller status</p>
         </div>
       </div>
     );
@@ -167,7 +171,7 @@ export default function ThreatLogs() {
                   <ShieldAlert className="w-5 h-5" style={{ color: COLORS.status.success }} />
                 </div>
                 <Badge variant="success">
-                  {summary.success_rate.toFixed(0)}%
+                  {(summary.success_rate ?? 0).toFixed(0)}%
                 </Badge>
               </div>
               <div className="space-y-1">
@@ -188,7 +192,7 @@ export default function ThreatLogs() {
               <div className="space-y-1">
                 <p className="text-tertiary text-sm">Response Time</p>
                 <p className="text-2xl font-bold text-white">
-                  {summary.response_time_avg_ms.toFixed(2)}ms
+                  {(summary.response_time_avg_ms ?? 0).toFixed(2)}ms
                 </p>
               </div>
             </CardContent>
@@ -205,7 +209,7 @@ export default function ThreatLogs() {
               <div className="space-y-1">
                 <p className="text-tertiary text-sm">Peak PPS</p>
                 <p className="text-2xl font-bold text-white">
-                  {(summary.peak_pps / 1000000).toFixed(1)}M
+                  {((summary.peak_pps || 0) / 1000000).toFixed(1)}M
                 </p>
               </div>
             </CardContent>
@@ -376,7 +380,7 @@ export default function ThreatLogs() {
                                       Packets/sec:
                                     </span>
                                     <span className="text-cyan font-mono">
-                                      {attack.anomaly?.packets_per_second.toFixed(
+                                      {(attack.anomaly?.packets_per_second ?? 0).toFixed(
                                         2
                                       )}
                                     </span>
@@ -386,7 +390,7 @@ export default function ThreatLogs() {
                                       SYN/ACK Ratio:
                                     </span>
                                     <span className="text-cyan font-mono">
-                                      {attack.anomaly?.syn_ack_ratio.toFixed(3)}
+                                      {(attack.anomaly?.syn_ack_ratio ?? 0).toFixed(3)}
                                     </span>
                                   </div>
                                   <div className="flex justify-between">

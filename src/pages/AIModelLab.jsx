@@ -85,7 +85,7 @@ function SvgBarChart({ data, dataKey, color, height = 300 }) {
 
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { getModels, getLatencyHistory, getActionDistribution } from '../api/services';
+import { getModels, getLatencyHistory, getActionDistribution, getRewardHistory } from '../api/services';
 import { COLORS } from '../design-system/constants';
 
 // Real XGBoost feature importance (from trained model)
@@ -130,10 +130,11 @@ export default function AIModelLab() {
         setLoading(true);
 
         // Fetch all data in parallel
-        const [modelsRes, latencyRes, actionRes] = await Promise.allSettled([
+        const [modelsRes, latencyRes, actionRes, rewardRes] = await Promise.allSettled([
           getModels(),
           getLatencyHistory(),
           getActionDistribution(),
+          getRewardHistory(),
         ]);
 
         // Models
@@ -176,6 +177,11 @@ export default function AIModelLab() {
               pct: Math.round((count / total) * 100),
             }))
           );
+        }
+
+        // Reward history
+        if (rewardRes.status === 'fulfilled') {
+          setRewardHistory(rewardRes.value.data.rewards || []);
         }
       } catch (err) {
         console.error('Error fetching AI lab data:', err);
@@ -483,8 +489,8 @@ export default function AIModelLab() {
                 </tr>
                 <tr className="border-b" style={{ borderColor: COLORS.border }}>
                   <td className="px-4 py-2 text-tertiary">Accuracy</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.accent.cyan }}>92.40%</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.status.success }}>97.2%</td>
+                  <td className="px-4 py-2" style={{ color: COLORS.accent.cyan }}>{models.risk_ml?.accuracy || '92.40%'}</td>
+                  <td className="px-4 py-2" style={{ color: COLORS.status.success }}>{models.rl_agent?.accuracy || '97.2%'}</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-2 text-tertiary">Training Data</td>

@@ -10,7 +10,7 @@ export function MainLayout() {
       <Sidebar />
 
       {/* Main Content Area */}
-      <div className="ml-60 flex flex-col min-h-screen">
+      <div className="md:ml-60 flex flex-col min-h-screen">
         {/* TopBar */}
         <TopBar />
 

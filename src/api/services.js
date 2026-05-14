@@ -133,6 +133,12 @@ export const decideAction = (networkFeatures, riskProbs, flowKey) =>
 export const getLatencyHistory = () => api.get('/api/v1/models/latency-history');
 
 /**
+ * Get RL agent reward history for charting
+ * GET /api/v1/models/reward-history
+ */
+export const getRewardHistory = () => api.get('/api/v1/models/reward-history');
+
+/**
  * Get RL action distribution counters
  * GET /api/v1/models/action-distribution
  */

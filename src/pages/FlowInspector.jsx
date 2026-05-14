@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Activity, Filter, Search, Layers, ChevronDown } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -9,9 +10,11 @@ export default function FlowInspector() {
   const [flows, setFlows] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedDpid, setSelectedDpid] = useState(null);
+  const [searchParams] = useSearchParams();
+  const [selectedDpid, setSelectedDpid] = useState(searchParams.get('dpid') || null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRow, setExpandedRow] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -26,15 +29,9 @@ export default function FlowInspector() {
         setStats(statsRes.data || null);
       } catch (err) {
         console.error('Error fetching flows:', err);
-        // Use mock data
-        setFlows(generateMockFlows());
-        setStats({
-          total_flows: 42,
-          active_flows: 38,
-          avg_packets_per_flow: 3450.5,
-          total_bytes: 156789456,
-          meters_active: 8,
-        });
+        setError('Failed to load flow data');
+        setFlows([]);
+        setStats(null);
       } finally {
         setLoading(false);
       }
@@ -58,12 +55,23 @@ export default function FlowInspector() {
     return matchesSearch && matchesDpid;
   });
 
-  if (loading && !flows.length) {
+  if (loading && !flows.length && !error) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <div className="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: COLORS.accent.cyan + '40', borderTopColor: COLORS.accent.cyan }}></div>
           <p className="text-secondary">Loading flows...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !flows.length) {
+    return (
+      <div className="text-center py-12">
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-lg inline-block">
+          <p className="font-semibold">⚠️ {error}</p>
+          <p className="text-sm mt-1 opacity-80">Check backend connectivity or Ryu controller status</p>
         </div>
       </div>
     );
@@ -385,29 +393,3 @@ export default function FlowInspector() {
   );
 }
 
-// Mock data generator
-function generateMockFlows() {
-  const dpids = ['00:00:00:00:00:00:00:01', '00:00:00:00:00:00:00:02'];
-  const ips = Array.from({ length: 10 }, (_, i) => `192.168.1.${i + 10}`);
-
-  return Array.from({ length: 20 }, (_, i) => ({
-    id: `flow-${i}`,
-    datapath_id: dpids[i % dpids.length],
-    priority: Math.floor(Math.random() * 32700),
-    match: {
-      eth_type: 2048,
-      ipv4_src: ips[Math.floor(Math.random() * ips.length)],
-      ipv4_dst: ips[Math.floor(Math.random() * ips.length)],
-      tcp_src: Math.floor(Math.random() * 65535),
-      tcp_dst: Math.floor(Math.random() * 65535),
-    },
-    actions: [
-      'forward:' + (Math.floor(Math.random() * 4) + 1),
-      'set_queue:' + Math.floor(Math.random() * 8),
-    ],
-    packets: Math.floor(Math.random() * 100000) + 1000,
-    bytes: Math.floor(Math.random() * 10000000) + 100000,
-    duration_seconds: Math.floor(Math.random() * 3600) + 60,
-    priority_rank: i,
-  }));
-}
