@@ -7,11 +7,11 @@
 export const COLORS = {
   // Backgrounds & Surfaces
   background: {
-    primary: '#0A0E1A',
-    card: '#151B2B',
-    sidebar: '#0D1117',
-    hover: '#1a2437',
-    input: '#0F1420',
+    primary: '#09090b', // zinc-950
+    card: '#18181b', // zinc-900
+    sidebar: '#09090b',
+    hover: '#27272a', // zinc-800
+    input: '#18181b',
   },
 
   // Accent Colors
@@ -23,7 +23,7 @@ export const COLORS = {
 
   // Status Colors - Semantic
   status: {
-    success: '#0A4A3F',
+    success: '#10B981', // Brighter Emerald-500 for better visibility
     warning: '#F5A623',
     danger: '#E74C3C',
     critical: '#8B3A3A',
@@ -42,7 +42,7 @@ export const COLORS = {
   border: {
     light: 'rgba(255, 255, 255, 0.05)',
     lighter: 'rgba(255, 255, 255, 0.02)',
-    default: '#1e293b',
+    default: '#27272a', // zinc-800
   },
 };
 
@@ -183,3 +183,11 @@ export const STATUS_COLOR_MAP = {
   active: 'cyan',
   inactive: 'amber',
 };
+
+/**
+ * Utility to add alpha transparency to a hex color
+ * @param {string} color - Hex color code (e.g. #00D9C0)
+ * @param {string} alphaHex - 2-character hex alpha (e.g. 1A for 10%)
+ * @returns {string} - Combined color string
+ */
+export const withAlpha = (color, alphaHex) => `${color}${alphaHex}`;

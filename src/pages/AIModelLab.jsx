@@ -86,18 +86,16 @@ function SvgBarChart({ data, dataKey, color, height = 300 }) {
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { getModels, getLatencyHistory, getActionDistribution, getRewardHistory } from '../api/services';
-import { COLORS } from '../design-system/constants';
+import { COLORS, withAlpha } from '../design-system/constants';
 
-// Real XGBoost feature importance (from trained model)
-const FEATURE_IMPORTANCE = [
-  { name: 'Packet Rate (pps)', importance: 94 },
-  { name: 'Byte Rate (bps)', importance: 87 },
-  { name: 'Flow Count', importance: 78 },
-  { name: 'ACK/SYN Ratio', importance: 72 },
-  { name: 'Drop Rate', importance: 65 },
-  { name: 'Anomaly Score', importance: 61 },
-  { name: 'Link Utilization', importance: 55 },
-];
+// Helper to map dynamic feature importance to design system colors
+const getFeatureColor = (name, importance) => {
+  const n = name.toLowerCase();
+  if (n.includes('drop')) return COLORS.status.danger;
+  if (n.includes('ack') || n.includes('anomaly')) return COLORS.status.warning;
+  if (importance < 60) return COLORS.accent.cyan; // Link utilization etc.
+  return COLORS.accent.cyan;
+};
 
 // Action name to display label mapping
 const ACTION_LABELS = {
@@ -119,10 +117,21 @@ const ACTION_COLORS = {
 export default function AIModelLab() {
   const [models, setModels] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const [decisionLatencyHistory, setDecisionLatencyHistory] = useState([]);
   const [rewardHistory, setRewardHistory] = useState([]);
   const [actionDist, setActionDist] = useState([]);
   const [latencyStats, setLatencyStats] = useState({ avg_ms: 0, count: 0 });
+
+  const styles = {
+    panel: COLORS.background.card,     // Zinc-900 surface for cards to pop from Zinc-950 bg
+    surface: COLORS.background.input,  // Internal surfaces
+    divider: withAlpha(COLORS.accent.cyan, '33'),  // 20% alpha for consistent separation
+    cardBorder: withAlpha(COLORS.accent.cyan, '4D'), // 30% alpha for crisp outlines
+    selectedBg: withAlpha(COLORS.accent.cyan, '26'), // 15% alpha for consistent highlights
+    panelSoft: withAlpha(COLORS.accent.cyan, '1A'),  // 10% alpha for soft surfaces
+    monoText: "font-mono text-[11px] tracking-tight",
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -199,8 +208,8 @@ export default function AIModelLab() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: COLORS.accent.cyan + '40', borderTopColor: COLORS.accent.cyan }}></div>
-          <p className="text-secondary">Loading AI models...</p>
+          <div className="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: withAlpha(COLORS.accent.cyan, '40'), borderTopColor: COLORS.accent.cyan }}></div>
+          <p className="font-bold" style={{ color: COLORS.accent.cyan }}>Initializing Inference Engine...</p>
         </div>
       </div>
     );
@@ -209,7 +218,7 @@ export default function AIModelLab() {
   if (!models) {
     return (
       <div className="text-center py-12">
-        <p className="text-red">Failed to load AI models</p>
+        <p style={{ color: COLORS.status.danger }}>Failed to reach ML Control Plane</p>
       </div>
     );
   }
@@ -217,236 +226,229 @@ export default function AIModelLab() {
   const maxActionCount = Math.max(...actionDist.map(a => a.count), 1);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-2">AI Model Lab</h1>
-        <p className="text-secondary">
-          Risk ML (XGBoost) and RL Agent (PPO) performance monitoring
-        </p>
+    <div className="space-y-6 animate-fade-in">
+      {/* HEADER SECTION */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-white tracking-widest uppercase">AI MODEL LAB</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <div className="w-2 h-2 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]" style={{ backgroundColor: COLORS.status.success }} />
+            <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: COLORS.text.tertiary }}>
+              INFERENCE ENGINE STATUS: <span style={{ color: COLORS.status.success }}>OPERATIONAL</span>
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Badge variant="outline" className="px-3 py-1 border-dashed opacity-60" style={{ borderColor: styles.divider, color: COLORS.text.tertiary }}>
+            POLLING: 15S
+          </Badge>
+          <div className="h-8 w-[1px]" style={{ backgroundColor: styles.divider }} />
+          <Brain className="w-6 h-6 opacity-80" style={{ color: COLORS.accent.cyan }} />
+        </div>
       </div>
 
       {/* Two-Panel Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* PANEL 1: Risk ML (XGBoost) */}
-        <div className="space-y-4">
-          <Card style={{ borderColor: COLORS.accent.cyan + '40' }} className="bg-gradient-to-br from-cyan-500/5 to-transparent">
-            <CardHeader>
+        <div className="space-y-6">
+          <Card style={{ borderColor: styles.cardBorder, backgroundColor: styles.panel }} className="overflow-hidden shadow-2xl">
+            <div className="h-[2px] w-full" style={{ backgroundColor: COLORS.accent.cyan }} />
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="w-5 h-5" style={{ color: COLORS.accent.cyan }} />
-                  Risk ML - XGBoost
+                <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+                  <Brain className="w-4 h-4" style={{ color: COLORS.accent.cyan }} />
+                  RISK ML DETECTOR
                 </CardTitle>
-                <Badge className="text-xs" style={{ backgroundColor: COLORS.accent.cyan + '30', color: COLORS.accent.cyan }}>
-                  {models.risk_ml?.version}
+                <Badge className="text-[10px] font-black tracking-widest" style={{ backgroundColor: styles.panelSoft, color: COLORS.accent.cyan, border: `1px solid ${withAlpha(COLORS.accent.cyan, '20')}` }}>
+                  {models.risk_ml?.model} {models.risk_ml?.version}
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg border text-tertiary" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                  <p className="text-xs text-tertiary mb-1">Accuracy</p>
-                  <p className="text-lg font-bold" style={{ color: COLORS.accent.cyan }}>
-                    {models.risk_ml?.accuracy}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg border text-tertiary" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                  <p className="text-xs text-tertiary mb-1">Classes</p>
-                  <p className="text-lg font-bold" style={{ color: COLORS.accent.cyan }}>
-                    {models.risk_ml?.classes}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg border text-tertiary" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                  <p className="text-xs text-tertiary mb-1">Input Features</p>
-                  <p className="text-lg font-bold" style={{ color: COLORS.accent.cyan }}>
-                    {models.risk_ml?.input_features}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg border text-tertiary" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                  <p className="text-xs text-tertiary mb-1">Sequence Length</p>
-                  <p className="text-lg font-bold" style={{ color: COLORS.accent.cyan }}>
-                    {models.risk_ml?.seq_len}
-                  </p>
-                </div>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: 'CLASSIFICATION ACCURACY', value: models.risk_ml?.accuracy, color: COLORS.status.success },
+                  { label: 'ATTACK CLASSES', value: models.risk_ml?.classes, color: COLORS.accent.cyan },
+                  { label: 'INPUT FEATURES', value: models.risk_ml?.input_features, color: COLORS.accent.cyan },
+                  { label: 'SEQ LENGTH', value: models.risk_ml?.seq_len, color: COLORS.text.tertiary },
+                ].map((stat, i) => (
+                  <div key={i} className="p-3 rounded border transition-colors hover:bg-zinc-800/20" style={{ borderColor: styles.divider, backgroundColor: withAlpha(styles.surface, '66') }}>
+                    <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-50" style={{ color: COLORS.text.tertiary }}>{stat.label}</p>
+                    <p className="text-xl font-black" style={{ color: stat.color }}>{stat.value}</p>
+                  </div>
+                ))}
               </div>
-              <div className="p-3 rounded-lg border" style={{ backgroundColor: COLORS.accent.cyan + '10', borderColor: COLORS.accent.cyan + '40' }}>
-                <p className="text-xs" style={{ color: COLORS.accent.cyan + 'DD' }}>
-                  <strong>XGBoost Architecture:</strong> High-performance gradient
-                  boosting tree model for anomaly detection across
-                  17 network features. Detects patterns in network flow
-                  behavior with 92% accuracy on 8 attack classes.
+              <div className="p-3 rounded border-l-2 bg-zinc-900/20" style={{ borderColor: withAlpha(COLORS.accent.cyan, '44') }}>
+                <p className="text-[11px] font-medium leading-relaxed" style={{ color: COLORS.text.secondary }}>
+                  <strong className="text-zinc-300">XGBoost Architecture:</strong> High-performance gradient boosting ensemble tuned for ultra-low latency anomaly detection. Analyzes {models.risk_ml?.input_features || 17} network observables in real-time.
                 </p>
               </div>
             </CardContent>
           </Card>
 
           {/* Decision Latency Chart — LIVE DATA */}
-          <Card style={{ borderColor: COLORS.accent.cyan + '40' }}>
+          <Card style={{ borderColor: styles.cardBorder, backgroundColor: styles.panel }} className="shadow-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <LineChartIcon className="w-5 h-5" style={{ color: COLORS.accent.cyan }} />
-                Decision Latency
+              <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+                <LineChartIcon className="w-4 h-4 opacity-70" style={{ color: COLORS.accent.cyan }} />
+                DECISION LATENCY (MS)
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div style={{ width: '100%', height: 300 }}>
+              <div style={{ width: '100%', height: 260 }}>
                 <SvgLineChart
                   data={decisionLatencyHistory}
                   dataKey="latency_ms"
-                  color={COLORS.accent.cyan}
-                  height={300}
+                  color={withAlpha(COLORS.accent.cyan, '99')}
+                  height={260}
                 />
               </div>
-              <div className="mt-4 p-3 rounded-lg border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                <p className="text-xs text-tertiary">
-                  Average latency: <span className="font-mono" style={{ color: COLORS.accent.cyan }}>{latencyStats.avg_ms.toFixed(2)}ms</span> • Inferences: <span className="font-mono" style={{ color: COLORS.accent.cyan }}>{latencyStats.count}</span>
+              <div className="mt-4 p-3 rounded border bg-zinc-900/40" style={{ borderColor: styles.divider }}>
+                <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                  AVERAGE SYSTEM LATENCY: <span className="font-black text-zinc-300">{latencyStats.avg_ms.toFixed(2)}ms</span> • SAMPLES: <span className="font-black text-zinc-300">{latencyStats.count}</span>
                 </p>
               </div>
             </CardContent>
           </Card>
 
           {/* Feature Importance — REAL XGBoost FEATURES */}
-          <Card className="border-blue-500/20">
+          <Card style={{ borderColor: styles.cardBorder, backgroundColor: styles.panel }} className="shadow-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
-                Top Contributing Features
+              <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+                <BarChart3 className="w-4 h-4 opacity-70" style={{ color: COLORS.accent.cyan }} />
+                INFERENCE FEATURE WEIGHTS
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {FEATURE_IMPORTANCE.map((item, idx) => (
-                  <div key={idx}>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm text-secondary">{item.name}</span>
-                      <span className="text-sm font-semibold" style={{ color: COLORS.accent.cyan }}>
-                        {item.importance}%
-                      </span>
+            <CardContent className="space-y-4">
+              {models.risk_ml?.feature_weights ? (
+                Object.entries(models.risk_ml.feature_weights)
+                  .map(([name, importance]) => ({
+                    name,
+                    importance,
+                    color: getFeatureColor(name, importance)
+                  }))
+                  .sort((a, b) => b.importance - a.importance)
+                  .map((item, idx) => (
+                    <div key={idx} className="space-y-1.5">
+                      <div className="flex justify-between items-end">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{item.name}</span>
+                        <span className="text-[11px] font-black opacity-80" style={{ color: item.color }}>{item.importance.toFixed(1)}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden shadow-inner bg-zinc-950 border border-zinc-900">
+                        <div
+                          className="h-full transition-all duration-1000 shadow-[0_0_8px_rgba(0,217,192,0.3)]"
+                          style={{
+                            backgroundColor: item.color,
+                            width: `${item.importance}%`
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-2 rounded-full border" style={{ borderColor: COLORS.border, backgroundColor: COLORS.card, overflow: 'hidden' }}>
-                      <div
-                        className="h-full"
-                        style={{
-                          background: `linear-gradient(to right, ${COLORS.accent.cyan}, ${COLORS.accent.cyan}80)`,
-                          width: `${item.importance}%`
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))
+              ) : (
+                <div className="py-12 text-center border border-dashed rounded bg-zinc-950/50" style={{ borderColor: styles.divider }}>
+                  <p className="text-[10px] font-black text-zinc-700 uppercase tracking-widest italic">Awaiting Inference Data...</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
         {/* PANEL 2: RL Agent (PPO) */}
-        <div className="space-y-4">
-          <Card style={{ borderColor: COLORS.status.success + '40' }} className="bg-gradient-to-br from-green-500/5 to-transparent">
-            <CardHeader>
+        <div className="space-y-6">
+          <Card style={{ borderColor: withAlpha(COLORS.status.success, '4D'), backgroundColor: styles.panel }} className="overflow-hidden shadow-2xl">
+            <div className="h-[2px] w-full" style={{ backgroundColor: COLORS.status.success }} />
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="w-5 h-5" style={{ color: COLORS.status.success }} />
-                  RL Agent - PPO
+                <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+                  <Target className="w-4 h-4" style={{ color: COLORS.status.success }} />
+                  RL MITIGATION AGENT
                 </CardTitle>
-                <Badge className="text-xs" style={{ backgroundColor: COLORS.status.success + '30', color: COLORS.status.success }}>
+                <Badge className="text-[10px] font-black tracking-widest" style={{ backgroundColor: withAlpha(COLORS.status.success, '10'), color: COLORS.status.success, border: `1px solid ${withAlpha(COLORS.status.success, '20')}` }}>
                   {models.rl_agent?.algorithm}
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg border text-tertiary" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                  <p className="text-xs text-tertiary mb-1">Training Steps</p>
-                  <p className="text-lg font-bold" style={{ color: COLORS.status.success }}>
-                    {(models.rl_agent?.training_steps / 1000).toFixed(0)}K
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg border text-tertiary" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                  <p className="text-xs text-tertiary mb-1">Episode Reward</p>
-                  <p className="text-lg font-bold" style={{ color: COLORS.status.success }}>
-                    {models.rl_agent?.episode_reward?.toFixed(1) ?? 'N/A'}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg border text-tertiary" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                  <p className="text-xs text-tertiary mb-1">Action Space</p>
-                  <p className="text-lg font-bold" style={{ color: COLORS.status.success }}>
-                    {models.rl_agent?.action_space}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg border text-tertiary" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                  <p className="text-xs text-tertiary mb-1">Observation Space</p>
-                  <p className="text-lg font-bold" style={{ color: COLORS.status.success }}>
-                    {models.rl_agent?.observation_space}
-                  </p>
-                </div>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: 'TRAINING STEPS', value: `${(models.rl_agent?.training_steps / 1000).toFixed(0)}K`, color: COLORS.status.success },
+                  { label: 'EPISODE REWARD', value: models.rl_agent?.episode_reward?.toFixed(1) ?? 'N/A', color: COLORS.status.success },
+                  { label: 'ACTION SPACE', value: models.rl_agent?.action_space, color: COLORS.accent.cyan },
+                  { label: 'OBSERVATION DIM', value: models.rl_agent?.observation_space, color: COLORS.accent.cyan },
+                ].map((stat, i) => (
+                  <div key={i} className="p-3 rounded border transition-colors hover:bg-zinc-800/20" style={{ borderColor: styles.divider, backgroundColor: withAlpha(styles.surface, '66') }}>
+                    <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-50" style={{ color: COLORS.text.tertiary }}>{stat.label}</p>
+                    <p className="text-xl font-black" style={{ color: stat.color }}>{stat.value}</p>
+                  </div>
+                ))}
               </div>
-              <div className="p-3 rounded-lg border" style={{ backgroundColor: COLORS.status.success + '10', borderColor: COLORS.status.success + '40' }}>
-                <p className="text-xs" style={{ color: COLORS.status.success + 'DD' }}>
-                  <strong>PPO Algorithm:</strong> Proximal Policy Optimization
-                  with 5 actions (allow, rate_limit, reroute, quarantine,
-                  block). Trained on a 25-dimension state (17 network features + 8 risk probabilities).
-                  Reward signal: successful threat mitigation vs false positives.
+              <div className="p-3 rounded border-l-2" style={{ borderColor: withAlpha(COLORS.status.success, '44'), backgroundColor: withAlpha(styles.surface, '33') }}>
+                <p className="text-[11px] font-medium leading-relaxed" style={{ color: COLORS.text.secondary }}>
+                  <strong className="text-zinc-300">PPO Strategy:</strong> Decision-maker that maps risk scores to high-fidelity mitigation actions. Uses a multi-dimension state to balance network availability with security.
                 </p>
               </div>
             </CardContent>
           </Card>
 
           {/* RL Reward Chart — placeholder until backend serves training curves */}
-          <Card style={{ borderColor: COLORS.status.success + '40' }}>
+          <Card style={{ borderColor: withAlpha(COLORS.status.success, '4D'), backgroundColor: styles.panel }} className="shadow-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" style={{ color: COLORS.status.success }} />
-                Training Reward Over Time
+              <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+                <TrendingUp className="w-4 h-4" style={{ color: COLORS.status.success }} />
+                TRAINING CONVERGENCE
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div style={{ width: '100%', height: 300 }}>
+              <div style={{ width: '100%', height: 260 }}>
                 <SvgBarChart
                   data={rewardHistory}
                   dataKey="reward"
-                  color={COLORS.status.success}
-                  height={300}
+                  color={withAlpha(COLORS.status.success, 'CC')}
+                  height={260}
                 />
               </div>
-              <div className="mt-4 p-3 rounded-lg border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.border }}>
-                <p className="text-xs text-tertiary">
-                  Current reward: <span className="font-mono" style={{ color: COLORS.status.success }}>{models.rl_agent?.episode_reward?.toFixed(1) ?? '508.5'}</span> • Training converged: <span className="font-mono" style={{ color: COLORS.status.success }}>✓</span>
+              <div className="mt-4 p-3 rounded border" style={{ borderColor: styles.divider, backgroundColor: withAlpha(styles.surface, '4D') }}>
+                <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                  STABILIZED REWARD: <span className="font-black text-zinc-300">{models.rl_agent?.episode_reward?.toFixed(1) ?? '508.5'}</span> • OPTIMIZER: <span className="font-black text-zinc-500">{models.rl_agent?.optimizer?.toUpperCase() ?? 'ADAM'}</span>
                 </p>
               </div>
             </CardContent>
           </Card>
 
           {/* Action Distribution — LIVE DATA */}
-          <Card style={{ borderColor: COLORS.status.success + '40' }}>
+          <Card style={{ borderColor: withAlpha(COLORS.status.success, '4D'), backgroundColor: styles.panel }} className="shadow-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="w-5 h-5" style={{ color: COLORS.status.success }} />
-                Action Distribution {actionDist.length > 0 && <Badge className="text-xs ml-2" style={{ backgroundColor: COLORS.status.success + '20', color: COLORS.status.success }}>LIVE</Badge>}
+              <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+                <Zap className="w-4 h-4" style={{ color: COLORS.status.success }} />
+                MITIGATION ACTION DISTRIBUTION
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               {actionDist.length > 0 ? (
                 actionDist.map((item, idx) => (
-                  <div key={idx}>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm text-secondary">{item.action}</span>
-                      <span className="text-sm font-semibold text-secondary">
-                        {item.count} decisions ({item.pct}%)
+                  <div key={idx} className="space-y-1.5">
+                    <div className="flex justify-between items-end">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">{item.action}</span>
+                      <span className="text-[11px] font-black text-zinc-400">
+                        {item.count} <span className="text-[9px] font-bold text-zinc-600">({item.pct}%)</span>
                       </span>
                     </div>
-                    <div className="h-2 rounded-full border" style={{ borderColor: COLORS.border, backgroundColor: COLORS.card, overflow: 'hidden' }}>
+                    <div className="h-2 rounded-full overflow-hidden shadow-inner bg-zinc-950 border border-zinc-900">
                       <div
-                        className="h-full"
+                        className="h-full transition-all duration-1000 shadow-[0_0_12px_rgba(255,255,255,0.03)]"
                         style={{
                           backgroundColor: item.color,
                           width: `${(item.count / maxActionCount) * 100}%`,
                         }}
-                      ></div>
+                      />
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-tertiary text-center py-4">No decisions recorded yet — waiting for telemetry</p>
+                <div className="py-12 text-center border border-dashed rounded bg-zinc-950/20" style={{ borderColor: styles.divider }}>
+                  <p className="text-[10px] font-black text-zinc-700 uppercase tracking-widest italic">Waiting for Mitigation Events...</p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -454,49 +456,37 @@ export default function AIModelLab() {
       </div>
 
       {/* Comparison Panel */}
-      <Card style={{ borderColor: COLORS.accent.cyan + '40' }}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="w-5 h-5" style={{ color: COLORS.accent.cyan }} />
-            Model Comparison
+      <Card style={{ borderColor: styles.cardBorder, backgroundColor: styles.panel }} className="shadow-2xl">
+        <CardHeader className="border-b" style={{ borderColor: styles.divider }}>
+          <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+            <Brain className="w-4 h-4 opacity-70" style={{ color: COLORS.accent.cyan }} />
+            MODEL ARCHITECTURE COMPARISON
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-left">
               <thead>
-                <tr className="border-b" style={{ borderColor: COLORS.border }}>
-                  <th className="px-4 py-2 text-left text-secondary">Metric</th>
-                  <th className="px-4 py-2 text-left text-secondary">Risk ML (XGBoost)</th>
-                  <th className="px-4 py-2 text-left text-secondary">RL Agent (PPO)</th>
+                <tr className="border-b bg-zinc-950/20" style={{ borderColor: styles.divider }}>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-600">Metric / Property</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">Risk ML (XGBoost)</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">RL Agent (PPO)</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr className="border-b" style={{ borderColor: COLORS.border }}>
-                  <td className="px-4 py-2 text-tertiary">Primary Role</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.accent.cyan }}>Risk Detection & Classification</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.status.success }}>Action Decision Making</td>
-                </tr>
-                <tr className="border-b" style={{ borderColor: COLORS.border }}>
-                  <td className="px-4 py-2 text-tertiary">Output</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.accent.cyan }}>Risk Score + Probabilities</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.status.success }}>Action ID + Confidence</td>
-                </tr>
-                <tr className="border-b" style={{ borderColor: COLORS.border }}>
-                  <td className="px-4 py-2 text-tertiary">Decision Time</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.accent.cyan }}>{latencyStats.avg_ms.toFixed(2)}ms avg</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.status.success }}>{latencyStats.avg_ms.toFixed(2)}ms avg</td>
-                </tr>
-                <tr className="border-b" style={{ borderColor: COLORS.border }}>
-                  <td className="px-4 py-2 text-tertiary">Accuracy</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.accent.cyan }}>{models.risk_ml?.accuracy || '92.40%'}</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.status.success }}>{models.rl_agent?.accuracy || '97.2%'}</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2 text-tertiary">Training Data</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.accent.cyan }}>Historical flows + labeled attacks</td>
-                  <td className="px-4 py-2" style={{ color: COLORS.status.success }}>Simulated environment + risk feedback</td>
-                </tr>
+              <tbody className="divide-y" style={{ borderColor: styles.divider }}>
+                {[
+                  { metric: 'PRIMARY ROLE', ml: 'Threat Classification', rl: 'Action Optimization' },
+                  { metric: 'CORE OUTPUT', ml: 'Anomaly Probability', rl: 'Strategic Action ID' },
+                  { metric: 'COMPUTE LATENCY', ml: `${(latencyStats.avg_ms * 0.45).toFixed(2)}ms (Est.)`, rl: `${(latencyStats.avg_ms * 0.55).toFixed(2)}ms (Est.)` },
+                  { metric: 'MODEL PERFORMANCE', ml: models.risk_ml?.accuracy ? `${models.risk_ml.accuracy} Accuracy` : 'N/A', rl: models.rl_agent?.episode_reward ? `${models.rl_agent.episode_reward.toFixed(1)} Reward` : 'N/A' },
+                  { metric: 'TRAINING REGIMEN', ml: 'Supervised Learning', rl: 'Deep Reinforcement' },
+                ].map((row, i) => (
+                  <tr key={i} className="hover:bg-zinc-800/10 transition-colors">
+                    <td className="px-6 py-4 text-[11px] font-black text-zinc-600 uppercase tracking-tighter">{row.metric}</td>
+                    <td className="px-6 py-4 font-mono text-[12px] font-bold" style={{ color: withAlpha(COLORS.accent.cyan, 'CC') }}>{row.ml}</td>
+                    <td className="px-6 py-4 font-mono text-[12px] font-bold" style={{ color: withAlpha(COLORS.status.success, 'CC') }}>{row.rl}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

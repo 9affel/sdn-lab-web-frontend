@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ShieldAlert,
   Search,
-  Filter,
   ChevronDown,
   AlertCircle,
   TrendingUp,
@@ -10,11 +9,41 @@ import {
   Zap,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
 import { getAttacks, getAttackSummary } from '../api/services';
-import { COLORS, STATUS_COLOR_MAP } from '../design-system/constants';
-import { useStatusColor } from '../design-system/hooks';
+import { COLORS } from '../design-system/constants';
 import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
+
+const severityStyles = {
+  critical: {
+    text: COLORS.status.danger,
+    bg: `${COLORS.status.danger}14`,
+    border: `${COLORS.status.danger}47`,
+    dot: COLORS.status.danger,
+  },
+  high: {
+    text: COLORS.status.danger,
+    bg: `${COLORS.status.danger}0F`,
+    border: `${COLORS.status.danger}38`,
+    dot: COLORS.status.danger,
+  },
+  medium: {
+    text: COLORS.status.warning,
+    bg: `${COLORS.status.warning}12`,
+    border: `${COLORS.status.warning}3D`,
+    dot: COLORS.status.warning,
+  },
+  low: {
+    text: COLORS.accent.cyan,
+    bg: `${COLORS.accent.cyan}0F`,
+    border: `${COLORS.accent.cyan}38`,
+    dot: COLORS.accent.cyan,
+  },
+};
+
+const getSeverityStyle = (severity) => {
+  const key = severity?.toLowerCase() || 'low';
+  return severityStyles[key] || severityStyles.low;
+};
 
 export default function ThreatLogs() {
   const [attacks, setAttacks] = useState([]);
@@ -83,35 +112,6 @@ export default function ThreatLogs() {
     return matchesSearch && matchesSeverity;
   });
 
-  const getSeverityStyle = (severity) => {
-    const status = severity?.toLowerCase() || 'cyan';
-    const colorKey = STATUS_COLOR_MAP[status] || 'cyan';
-    
-    const colorMap = {
-      red: {
-        bg: 'rgba(231, 76, 60, 0.08)',
-        border: 'rgba(231, 76, 60, 0.3)',
-        text: '#E74C3C',
-      },
-      green: {
-        bg: 'rgba(10, 74, 63, 0.15)',
-        border: 'rgba(10, 74, 63, 0.4)',
-        text: '#0A4A3F',
-      },
-      amber: {
-        bg: 'rgba(245, 166, 35, 0.08)',
-        border: 'rgba(245, 166, 35, 0.3)',
-        text: '#F5A623',
-      },
-      cyan: {
-        bg: 'rgba(0, 217, 192, 0.08)',
-        border: 'rgba(0, 217, 192, 0.3)',
-        text: '#00D9C0',
-      },
-    };
-    return colorMap[colorKey] || colorMap.cyan;
-  };
-
   if (loading && !attacks.length && !error) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -147,70 +147,98 @@ export default function ThreatLogs() {
       {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card style={{ borderColor: COLORS.status.danger + '40' }}>
+          <Card className="border border-red-500/30 hover:border-red-500/40 transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: COLORS.status.danger + '15' }}>
-                  <AlertCircle className="w-5 h-5" style={{ color: COLORS.status.danger }} />
+                <div className="p-3 rounded-lg bg-red-500/10">
+                  <AlertCircle className="w-6 h-6 text-red-400" />
                 </div>
-                <Badge variant="danger">24h</Badge>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/40 border border-slate-700/50">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">24h</span>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-tertiary text-sm">Total Attacks</p>
-                <p className="text-2xl font-bold text-white">
+              <div className="space-y-2">
+                <p className="text-slate-400 text-sm font-medium">Total Attacks</p>
+                <p className="text-2xl font-bold text-red-400">
                   {summary.total_attacks}
                 </p>
+                <p className="text-slate-500 text-xs">Detected events</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card style={{ borderColor: COLORS.status.success + '40' }}>
+          <Card className="border border-cyan-500/30 hover:border-cyan-500/40 transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: COLORS.status.success + '25' }}>
-                  <ShieldAlert className="w-5 h-5" style={{ color: COLORS.status.success }} />
+                <div className="p-3 rounded-lg bg-cyan-500/10">
+                  <ShieldAlert className="w-6 h-6 text-cyan-400" />
                 </div>
-                <Badge variant="success">
-                  {(summary.success_rate ?? 0).toFixed(0)}%
-                </Badge>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/40 border border-slate-700/50">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {(summary.success_rate ?? 0).toFixed(0)}%
+                  </span>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-tertiary text-sm">Attacks Blocked</p>
-                <p className="text-2xl font-bold text-white">{summary.blocked}</p>
+              <div className="space-y-2">
+                <p className="text-slate-400 text-sm font-medium">Attacks Blocked</p>
+                <p className="text-2xl font-bold text-cyan-400">{summary.blocked}</p>
+                <p className="text-slate-500 text-xs">Defense success rate</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card style={{ borderColor: COLORS.accent.cyan + '40' }}>
+          <Card className="border border-blue-500/30 hover:border-blue-500/40 transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: COLORS.accent.cyan + '15' }}>
-                  <Zap className="w-5 h-5" style={{ color: COLORS.accent.cyan }} />
+                <div className="p-3 rounded-lg bg-blue-500/10">
+                  <Zap className="w-6 h-6 text-blue-400" />
                 </div>
-                <Badge variant="cyan">avg</Badge>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/40 border border-slate-700/50">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">avg</span>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-tertiary text-sm">Response Time</p>
-                <p className="text-2xl font-bold text-white">
+              <div className="space-y-2">
+                <p className="text-slate-400 text-sm font-medium">Response Time</p>
+                <p className="text-2xl font-bold text-blue-400">
                   {(summary.response_time_avg_ms ?? 0).toFixed(2)}ms
                 </p>
+                <p className="text-slate-500 text-xs">Average mitigation</p>
               </div>
             </CardContent>
           </Card>
 
-          <Card style={{ borderColor: COLORS.accent.cyan + '40' }}>
+          <Card className="border border-purple-500/30 hover:border-purple-500/40 transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: COLORS.accent.cyan + '15' }}>
-                  <TrendingUp className="w-5 h-5" style={{ color: COLORS.accent.cyan }} />
+                <div className="p-3 rounded-lg bg-purple-500/10">
+                  <TrendingUp className="w-6 h-6 text-purple-400" />
                 </div>
-                <Badge variant="cyan">peak</Badge>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/40 border border-slate-700/50">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">peak</span>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-tertiary text-sm">Peak PPS</p>
-                <p className="text-2xl font-bold text-white">
+              <div className="space-y-2">
+                <p className="text-slate-400 text-sm font-medium">Peak PPS</p>
+                <p className="text-2xl font-bold text-purple-400">
                   {((summary.peak_pps || 0) / 1000000).toFixed(1)}M
                 </p>
+                <p className="text-slate-500 text-xs">Traffic pressure</p>
               </div>
             </CardContent>
           </Card>
@@ -218,7 +246,7 @@ export default function ThreatLogs() {
       )}
 
       {/* Filters Bar */}
-      <Card className="border-border">
+      <Card className="border border-cyan-500/20">
         <CardContent className="py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="relative flex-1">
@@ -228,13 +256,13 @@ export default function ThreatLogs() {
                 placeholder="Filter by Source/Dest IP or Attack Type..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-border text-sm text-white placeholder:text-muted focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors"
+                className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-cyan-500/20 text-sm text-white placeholder:text-muted focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors"
               />
             </div>
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
-              className="h-10 px-4 rounded-lg bg-input border border-border text-sm text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors"
+              className="h-10 px-4 rounded-lg bg-input border border-cyan-500/20 text-sm text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors"
             >
               <option value="all">All Severities</option>
               <option value="critical">Critical</option>
@@ -247,7 +275,7 @@ export default function ThreatLogs() {
       </Card>
 
       {/* Attacks Table */}
-      <Card className="border-border">
+      <Card className="border border-cyan-500/20 overflow-hidden">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-cyan" />
@@ -256,28 +284,28 @@ export default function ThreatLogs() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">
+            <table className="w-full border-separate border-spacing-0">
+              <thead className="bg-input/70">
+                <tr className="border-b border-cyan-500/20">
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
                     Time
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
                     Source → Dest
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
                     Type
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
                     Severity
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
                     Action
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-secondary">
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
                     Confidence
                   </th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary">
+                  <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
                     Details
                   </th>
                 </tr>
@@ -289,14 +317,14 @@ export default function ThreatLogs() {
                     return (
                       <React.Fragment key={attack.id}>
                         <tr
-                          className="border-b border-hover hover:bg-hover/50 transition-colors"
+                          className="border-b border-cyan-500/10 hover:bg-cyan-500/5 transition-colors cursor-pointer"
                           onClick={() =>
                             setExpandedRow(
                               expandedRow === attack.id ? null : attack.id
                             )
                           }
                         >
-                          <td className="px-4 py-3 text-sm text-tertiary whitespace-nowrap">
+                          <td className="px-4 py-4 text-sm text-slate-400 whitespace-nowrap">
                             {(() => {
                               const d = new Date(attack.timestamp);
                               const isValid = !isNaN(d.getTime());
@@ -308,39 +336,45 @@ export default function ThreatLogs() {
                               });
                             })()}
                           </td>
-                          <td className="px-4 py-3 text-sm font-mono">
-                            <div className="text-cyan truncate max-w-xs">
+                          <td className="px-4 py-4 text-sm font-mono">
+                            <div className="text-cyan truncate max-w-xs font-semibold">
                               {attack.source_ip || attack.src_ip || '—'}
                             </div>
                             <div className="text-muted truncate max-w-xs">
                               → {attack.destination_ip || attack.dst_ip || '—'}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-sm text-tertiary">
-                            {attack.type}
+                          <td className="px-4 py-4 text-sm">
+                            <span className="font-medium text-slate-200">
+                              {attack.type}
+                            </span>
                           </td>
-                          <td className="px-4 py-3">
-                            <Badge
+                          <td className="px-4 py-4">
+                            <span
                               style={{
                                 backgroundColor: color.bg,
                                 color: color.text,
                                 borderColor: color.border,
                               }}
-                              className="border"
+                              className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider"
                             >
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ backgroundColor: color.dot }}
+                              />
                               {attack.severity?.toUpperCase() || 'UNKNOWN'}
-                            </Badge>
+                            </span>
                           </td>
-                          <td className="px-4 py-3 text-sm">
-                            <Badge className="bg-hover text-hint">
+                          <td className="px-4 py-4 text-sm">
+                            <span className="inline-flex rounded-md border border-slate-700/50 bg-slate-800/40 px-2.5 py-1 text-xs font-medium text-slate-300">
                               {attack.action_taken?.action_name || 'UNKNOWN'}
-                            </Badge>
+                            </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-4">
                             <div className="flex items-center gap-2">
-                              <div className="flex-1 h-2 bg-border rounded-full overflow-hidden">
+                              <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
                                 <div
-                                  className="h-full bg-gradient-to-r from-cyan to-cyan"
+                                  className="h-full bg-cyan"
                                   style={{
                                     width: `${
                                       (attack.action_taken?.confidence || 0) * 100
@@ -348,16 +382,16 @@ export default function ThreatLogs() {
                                   }}
                                 ></div>
                               </div>
-                              <span className="text-xs text-muted">
+                              <span className="w-9 text-right text-xs font-semibold text-slate-300">
                                 {(
                                   (attack.action_taken?.confidence || 0) * 100
                                 ).toFixed(0)}%
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-4 py-4 text-center">
                             <ChevronDown
-                              className={`w-5 h-5 text-muted transition-transform ${
+                              className={`mx-auto w-5 h-5 text-cyan transition-transform ${
                                 expandedRow === attack.id ? 'rotate-180' : ''
                               }`}
                             />
@@ -366,7 +400,7 @@ export default function ThreatLogs() {
 
                       {/* Expanded Row - Anomaly and Feature Data */}
                       {expandedRow === attack.id && (
-                        <tr className="bg-primary border-b border-border">
+                        <tr className="bg-input/60 border-b border-cyan-500/10">
                           <td colSpan="7" className="px-4 py-4">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                               {/* Anomaly Data */}

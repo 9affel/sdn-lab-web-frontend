@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
-import { getDashboardMetrics, getMetricsHistory, getAttackSummary } from "../api/services";
+import { getDashboardMetrics, getMetricsHistory, getAttackSummary, getModels } from "../api/services";
 import { COLORS } from "../design-system/constants";
 import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
 
@@ -25,12 +25,47 @@ const safe = (obj, path, fallback = 0) => {
   } catch { return fallback; }
 };
 
+const metricAsRatio = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = typeof value === "string"
+    ? Number(value.trim().replace("%", ""))
+    : Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.min(1, numeric > 1 ? numeric / 100 : numeric));
+};
+
+const extractF1Score = (modelInfo) => {
+  const metrics = modelInfo?.metrics || {};
+  const candidates = [
+    modelInfo?.f1_score,
+    modelInfo?.f1,
+    modelInfo?.macro_f1,
+    modelInfo?.weighted_f1,
+    metrics.f1_score,
+    metrics.f1,
+    metrics.macro_f1,
+    metrics.weighted_f1,
+  ];
+
+  for (const candidate of candidates) {
+    const score = metricAsRatio(candidate);
+    if (score !== null) return score;
+  }
+
+  return null;
+};
+
+const formatPercentMetric = (value) => {
+  const score = metricAsRatio(value);
+  return score === null ? "N/A" : `${(score * 100).toFixed(1)}%`;
+};
+
 // ── Default metrics shape (prevents "Failed to load" on cold start) ──────────
 const DEFAULT_METRICS = {
   timestamp: new Date().toISOString(),
   network: { total_packets: 0, total_bytes: 0, packet_rate_pps: 0, byte_rate_mbps: 0, active_flows: 0, port_utilization: 0 },
   security: { attacks_detected_hour: 0, attacks_blocked_hour: 0, false_positives_hour: 0, defense_success_rate: 100, avg_response_time_ms: 0, blocked_traffic_pps: 0 },
-  ai: { risk_model_accuracy: 0, rl_avg_reward: 0, predictions_per_second: 0, decision_latency_ms: 0 },
+  ai: { risk_model_accuracy: null, risk_model_f1_score: null, rl_avg_reward: 0, predictions_per_second: 0, decision_latency_ms: 0 },
   system: { cpu_usage_percent: 0, memory_usage_mb: 0, uptime_hours: 0, services_healthy: 0, api_requests_per_min: 0 },
 };
 
@@ -162,6 +197,7 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [attackSummary, setAttackSummary] = useState(null);
+  const [modelF1Score, setModelF1Score] = useState(null);
 
   const { data: wsMetrics, status: wsStatus } = useSDNWebSocket('/metrics');
 
@@ -182,26 +218,33 @@ export default function Dashboard() {
   }, []);
 
   const fetchMetrics = useCallback(async () => {
-    try {
-      const [metricsRes, summaryRes] = await Promise.all([
-        getDashboardMetrics(),
-        getAttackSummary()
-      ]);
-      
-      if (metricsRes.data) {
-        setMetrics(metricsRes.data);
-        setLastUpdated(new Date());
-        setError(null);
-      }
-      
-      if (summaryRes.data) {
-        setAttackSummary(summaryRes.data);
-      }
-    } catch (err) {
-      console.error("Error fetching metrics:", err);
+    const [metricsRes, summaryRes, modelsRes] = await Promise.allSettled([
+      getDashboardMetrics(),
+      getAttackSummary(),
+      getModels(),
+    ]);
+
+    if (metricsRes.status === 'fulfilled' && metricsRes.value.data) {
+      setMetrics(metricsRes.value.data);
+      setLastUpdated(new Date());
+      setError(null);
+    } else {
+      console.error("Error fetching metrics:", metricsRes.reason);
       // Don't overwrite existing metrics on transient failures
       if (!metrics) {
         setError("Backend not reachable. Retrying...");
+      }
+    }
+
+    if (summaryRes.status === 'fulfilled' && summaryRes.value.data) {
+      setAttackSummary(summaryRes.value.data);
+    }
+
+    if (modelsRes.status === 'fulfilled' && modelsRes.value.data) {
+      const nextF1Score = extractF1Score(modelsRes.value.data.risk_ml);
+      if (nextF1Score !== null) {
+        setModelF1Score(nextF1Score);
+        setLastUpdated(new Date());
       }
     }
   }, [metrics]);
@@ -258,6 +301,7 @@ export default function Dashboard() {
 
   // Use real metrics or defaults
   const m = metrics || DEFAULT_METRICS;
+  const displayedF1Score = modelF1Score ?? safe(m, 'ai.risk_model_f1_score', null);
 
   if (loading && !metrics) {
     return (
@@ -301,7 +345,7 @@ export default function Dashboard() {
     },
     {
       title: "System Health",
-      value: `${safe(m, 'system.services_healthy', 0)}/3 Active`,
+      value: `${safe(m, 'system.services_healthy', 0)}/${safe(m, 'system.total_services', 3)} Active`,
       subtitle: `${safe(m, 'system.cpu_usage_percent').toFixed(1)}% CPU • ${Math.round(safe(m, 'system.memory_usage_mb'))} MB RAM`,
       icon: Cpu,
       textColor: "text-cyan-400",
@@ -427,9 +471,9 @@ export default function Dashboard() {
                 <Brain className="w-6 h-6 text-purple-400" />
               </div>
               <div>
-                <p className="text-slate-400 text-sm">Model Accuracy</p>
+                <p className="text-slate-400 text-sm">Model F1 Score</p>
                 <p className="text-2xl font-bold text-purple-400">
-                  {(safe(m, 'ai.risk_model_accuracy') * 100).toFixed(1)}%
+                  {formatPercentMetric(displayedF1Score)}
                 </p>
               </div>
             </div>
