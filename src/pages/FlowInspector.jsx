@@ -73,13 +73,22 @@ export default function FlowInspector() {
       if (isManual) setIsSyncing(true);
       if (!flows.length) setLoading(true);
       
-      const [flowsRes, statsRes] = await Promise.all([
+      const [flowsRes, statsRes] = await Promise.allSettled([
         getFlows(selectedDpid, 100, 0),
         getFlowStatistics(),
       ]);
 
-      setFlows(flowsRes.data.flows || []);
-      setStats(statsRes.data || null);
+      if (flowsRes.status === 'fulfilled') {
+        setFlows(flowsRes.value.data.flows || []);
+      }
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value.data || null);
+      }
+
+      if (flowsRes.status === 'rejected' && statsRes.status === 'rejected') {
+        throw flowsRes.reason || statsRes.reason;
+      }
+
       setError(null);
     } catch (err) {
       console.error('Error fetching flows:', err);
@@ -98,7 +107,11 @@ export default function FlowInspector() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const uniqueDpids = useMemo(() => [...new Set(flows.map((f) => f.datapath_id))], [flows]);
+  const uniqueDpids = useMemo(() => {
+    const fromFlows = flows.map((f) => f.datapath_id).filter(Boolean);
+    const fromTelemetry = Object.keys(stats?.datapaths || {});
+    return [...new Set([...fromFlows, ...fromTelemetry])];
+  }, [flows, stats]);
 
   const filteredFlows = useMemo(() => flows.filter((flow) => {
     const matchesSearch = !searchTerm ||
@@ -125,14 +138,25 @@ export default function FlowInspector() {
       acc[f.priority] = (acc[f.priority] || 0) + 1;
       return acc;
     }, {});
+    if (!Object.keys(groups).length && stats?.total_flows) {
+      groups.TELEMETRY = stats.total_flows;
+    }
     return Object.entries(groups).map(([p, count]) => ({
       priority: p,
       count,
       role: getFlowRole(p).label
-    })).sort((a, b) => b.priority - a.priority);
-  }, [flows]);
+    })).sort((a, b) => Number(b.priority) - Number(a.priority));
+  }, [flows, stats]);
 
-  const totalPackets = useMemo(() => flows.reduce((sum, f) => sum + (f.packets || 0), 0), [flows]);
+  const totalPackets = useMemo(
+    () => flows.reduce((sum, f) => sum + (f.packets || 0), 0) || stats?.total_packets || 0,
+    [flows, stats]
+  );
+  const totalFlows = stats?.total_flows || flows.length;
+  const activeRules = stats?.active_flows || totalFlows;
+  const secureRules = flows.length
+    ? flows.filter(f => f.priority === 100 || f.actions?.length === 0).length
+    : activeRules;
 
   if (loading && !flows.length && !error) {
     return (
@@ -183,9 +207,9 @@ export default function FlowInspector() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatBox icon={Layers} label="Active Rules" value={stats?.active_flows || 0} color={COLORS.accent.cyan} />
-            <StatBox icon={TrendingUp} label="Flow Density" value={`${Math.min(100, (flows.length / 2000 * 100)).toFixed(1)}%`} color={COLORS.status.warning} />
-            <StatBox icon={ShieldCheck} label="Secure Rules" value={flows.filter(f => f.priority === 100 || f.actions?.length === 0).length} color="#4ADE80" />
+            <StatBox icon={Layers} label="Active Rules" value={activeRules} color={COLORS.accent.cyan} />
+            <StatBox icon={TrendingUp} label="Flow Density" value={`${Math.min(100, (totalFlows / 2000 * 100)).toFixed(1)}%`} color={COLORS.status.warning} />
+            <StatBox icon={ShieldCheck} label="Secure Rules" value={secureRules} color="#4ADE80" />
           </div>
 
           <Card style={{ borderColor: styles.cardBorder, backgroundColor: styles.panel }}>

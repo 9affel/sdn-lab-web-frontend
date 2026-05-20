@@ -14,8 +14,9 @@ import {
   Waves,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
-import { getTopology } from '../api/services';
+import { getTopology, getAttacks, getDashboardMetrics } from '../api/services';
 import { COLORS } from '../design-system/constants';
+import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
 
 const withAlpha = (color, alphaHex) => `${color}${alphaHex}`;
 
@@ -37,6 +38,125 @@ const styles = {
 
 const isHostNode = (node) => node.id?.startsWith('h_') || node.name?.toLowerCase().startsWith('h_');
 const normalizeName = (node) => `${node.name || node.id || ''}`.toLowerCase();
+const normalizeText = (value) => `${value || ''}`.trim().toLowerCase();
+
+const LAB_HOST_ALIASES = {
+  '192.168.1.2': 'h_attacker',
+  '192.168.1.3': 'h_sensor',
+  '192.168.1.4': 'h_plc',
+  '192.168.1.5': 'h_sensor_conveyor',
+  '192.168.1.6': 'h_sensor_hvac',
+  '192.168.1.7': 'h_actuator_valve',
+  attacker: 'h_attacker',
+  sensor: 'h_sensor',
+  security_sensor: 'h_sensor',
+  plc: 'h_plc',
+  plc_robot_arm: 'h_plc',
+  robot: 'h_plc',
+  robot_arm: 'h_plc',
+  conveyor: 'h_sensor_conveyor',
+  conveyor_speed: 'h_sensor_conveyor',
+  hvac: 'h_sensor_hvac',
+  hvac_temp: 'h_sensor_hvac',
+  actuator_valve: 'h_actuator_valve',
+  valve: 'h_actuator_valve',
+};
+
+const PLACEHOLDER_IPS = new Set(['', '0.0.0.0', '::', 'unknown', 'null', 'undefined']);
+const ACTIVE_ATTACK_WINDOW_MS = 90_000;
+const BENIGN_ATTACK_CLASSES = new Set([
+  'benign',
+  'normal',
+  'no_attack',
+  'no attack',
+  'none',
+  'allow',
+  'allowed',
+  'unknown',
+  'normal_traffic',
+]);
+
+const cleanAddress = (value) => {
+  const raw = normalizeText(value);
+  if (!raw) return '';
+  return raw
+    .replace(/^ip:/, '')
+    .replace(/:\d+$/, '')
+    .replace(/\/\d+$/, '');
+};
+
+const getAttackClass = (attack) =>
+  normalizeText(attack?.type || attack?.attack_type || attack?.ai_analysis?.attack_class)
+    .replace(/\s+/g, '_');
+
+const isRecentAttack = (attack) => {
+  if (!attack?.timestamp) return true;
+  const attackTime = new Date(attack.timestamp).getTime();
+  return Number.isFinite(attackTime) && Date.now() - attackTime < ACTIVE_ATTACK_WINDOW_MS;
+};
+
+const isActiveThreat = (attack) => {
+  const attackClass = getAttackClass(attack);
+  if (!attack || !attackClass || BENIGN_ATTACK_CLASSES.has(attackClass) || attack?.resolved) {
+    return false;
+  }
+  return isRecentAttack(attack);
+};
+
+const getDisplayAttackType = (attack) => {
+  const rawType = attack?.type || attack?.attack_type || attack?.ai_analysis?.attack_class;
+  return `${rawType || 'ACTIVE ATTACK'}`.replace(/_/g, ' ').toUpperCase();
+};
+
+const resolveEndpointId = (value, endpoints = []) => {
+  const key = cleanAddress(value);
+  if (!key || PLACEHOLDER_IPS.has(key)) return null;
+
+  const directAlias = LAB_HOST_ALIASES[key];
+  if (directAlias) return directAlias;
+
+  const endpoint = endpoints.find((node) => {
+    const id = normalizeText(node.id);
+    const ip = cleanAddress(node.ip);
+    const name = normalizeText(node.name).replace(/\s+/g, '_');
+    return id === key || ip === key || name === key || name.includes(key);
+  });
+
+  return endpoint?.id || null;
+};
+
+const inferVictimFromAttack = (attack) => {
+  const attackClass = getAttackClass(attack);
+  const actionName = normalizeText(attack?.action_taken?.action_name || attack?.action_name);
+  const ports = [
+    attack?.destination_port,
+    attack?.dst_port,
+    attack?.dport,
+    attack?.port,
+  ].map((port) => normalizeText(port)).filter(Boolean);
+  const combined = `${attackClass} ${actionName} ${ports.join(' ')}`;
+
+  if (combined.includes('fdi') || combined.includes('false') || combined.includes('injection')) {
+    return ['h_sensor'];
+  }
+  if (combined.includes('modbus') || combined.includes('assembly') || combined.includes('plc')) {
+    return ['h_plc'];
+  }
+  if (combined.includes('mqtt') || combined.includes('utility') || combined.includes('hvac')) {
+    return ['h_sensor_hvac'];
+  }
+  if (ports.includes('502')) {
+    return ['h_plc'];
+  }
+  if (ports.includes('1883')) {
+    return ['h_sensor_hvac'];
+  }
+  if (combined.includes('ddos') || combined.includes('dos') || combined.includes('flood')) {
+    return ['h_plc', 'h_sensor_hvac'];
+  }
+
+  return [];
+};
 
 const classifyEndpoint = (node) => {
   const label = normalizeName(node);
@@ -62,11 +182,11 @@ const classifyEndpoint = (node) => {
       border: styles.warningBorder,
     };
   }
-  if (label.includes('sensor') || label.includes('iot')) {
+  if (label.includes('sensor') || label.includes('iot') || label.includes('actuator') || label.includes('valve')) {
     return {
       plane: 'factory',
       role: 'Smart Factory',
-      subtype: 'Sensor',
+      subtype: 'Sensor/Actuator',
       Icon: Waves,
       accent: COLORS.accent.cyan,
       bg: styles.panelSoft,
@@ -124,15 +244,46 @@ export default function NetworkMap() {
   const [loading, setLoading] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [error, setError] = useState(null);
+  const [activeAttack, setActiveAttack] = useState(null);
+
+  // Subscribe to live attack updates via WebSockets
+  const { data: wsAttackData } = useSDNWebSocket('/attacks');
+  const { data: wsMetricsData } = useSDNWebSocket('/metrics');
 
   useEffect(() => {
     const fetchTopology = async () => {
       try {
         setLoading(true);
-        const response = await getTopology();
-        setTopology(response.data);
-        const firstSwitch = response.data.switches?.find((node) => !isHostNode(node));
-        const firstNode = firstSwitch || response.data.switches?.[0];
+        // Query recent attacks and live metrics so the map still updates if one stream is delayed.
+        const [topoResult, attacksResult, metricsResult] = await Promise.allSettled([
+          getTopology(),
+          getAttacks(5, 0, 120),
+          getDashboardMetrics(),
+        ]);
+
+        if (topoResult.status !== 'fulfilled') {
+          throw topoResult.reason;
+        }
+
+        const topoRes = topoResult.value;
+
+        setTopology(topoRes.data);
+
+        const latestAttack = attacksResult.status === 'fulfilled'
+          ? attacksResult.value.data?.attacks?.[0]
+          : null;
+        const latestMetricsAttack = metricsResult.status === 'fulfilled'
+          ? metricsResult.value.data?.latest_attack
+          : null;
+        const nextAttack = metricsResult.status === 'fulfilled' ? latestMetricsAttack : latestAttack;
+        if (isActiveThreat(nextAttack)) {
+          setActiveAttack(nextAttack);
+        } else {
+          setActiveAttack(null);
+        }
+
+        const firstSwitch = topoRes.data.switches?.find((node) => !isHostNode(node));
+        const firstNode = firstSwitch || topoRes.data.switches?.[0];
         if (firstNode) setSelectedNodeId((current) => current || firstNode.id);
         setError(null);
       } catch (err) {
@@ -150,6 +301,29 @@ export default function NetworkMap() {
     return () => clearInterval(interval);
   }, []);
 
+  // Listen for real-time WebSocket attack notifications
+  useEffect(() => {
+    if (wsAttackData && wsAttackData.type === 'attack_detected' && isActiveThreat(wsAttackData.attack)) {
+      setActiveAttack(wsAttackData.attack);
+    }
+  }, [wsAttackData]);
+
+  // Fall back to the metrics stream, which carries the backend's latest in-memory AI action.
+  useEffect(() => {
+    if (wsMetricsData && wsMetricsData.type === 'metrics_update') {
+      setActiveAttack(isActiveThreat(wsMetricsData.latest_attack) ? wsMetricsData.latest_attack : null);
+    }
+  }, [wsMetricsData]);
+
+  // Automatically clear the active attack state if no telemetry updates are received for 8 seconds
+  useEffect(() => {
+    if (!activeAttack) return;
+    const timer = setTimeout(() => {
+      setActiveAttack(null);
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [activeAttack]);
+
   const topologyModel = useMemo(() => {
     const nodes = topology?.switches || [];
     const links = topology?.links || [];
@@ -163,21 +337,128 @@ export default function NetworkMap() {
     return { dataPlaneSwitches, endpoints, factoryEndpoints, userEndpoints, links };
   }, [topology]);
 
+  const victimNodeIds = useMemo(() => {
+    if (!activeAttack) return [];
+
+    const candidateFields = [
+      activeAttack.destination_ip,
+      activeAttack.dst_ip,
+      activeAttack.dest_ip,
+      activeAttack.target_ip,
+      activeAttack.victim_ip,
+      activeAttack.destination,
+      activeAttack.target,
+      activeAttack.victim,
+    ];
+
+    for (const candidate of candidateFields) {
+      const endpointId = resolveEndpointId(candidate, topologyModel.endpoints);
+      if (endpointId) return [endpointId];
+    }
+
+    return inferVictimFromAttack(activeAttack);
+  }, [activeAttack, topologyModel.endpoints]);
+
+  const threatSourceNodeId = useMemo(() => {
+    if (!activeAttack) return null;
+
+    const candidateFields = [
+      activeAttack.source_ip,
+      activeAttack.src_ip,
+      activeAttack.source,
+      activeAttack.attacker_ip,
+      activeAttack.attacker,
+    ];
+
+    for (const candidate of candidateFields) {
+      const endpointId = resolveEndpointId(candidate, topologyModel.endpoints);
+      if (endpointId) return endpointId;
+    }
+
+    return null;
+  }, [activeAttack, topologyModel.endpoints]);
+
   const nodePositions = useMemo(() => {
     const positions = {};
-    const spread = (items, y, startX, endX) => {
-      items.forEach((node, idx) => {
-        const step = items.length > 1 ? (endX - startX) / (items.length - 1) : 0;
-        positions[node.id] = { x: items.length > 1 ? startX + step * idx : (startX + endX) / 2, y };
-      });
+    positions.__controller = { x: 400, y: 70 };
+
+    // 1. Identify and position the switches in a symmetrical line
+    const coreSwitch = topologyModel.dataPlaneSwitches.find(sw => sw.name?.toLowerCase().includes('core'));
+    const assemblySwitch = topologyModel.dataPlaneSwitches.find(sw => sw.name?.toLowerCase().includes('assembly'));
+    const utilitySwitch = topologyModel.dataPlaneSwitches.find(sw => sw.name?.toLowerCase().includes('utility'));
+
+    const coreX = 400;
+    const assemblyX = 200;
+    const utilityX = 600;
+    const switchY = 225;
+
+    if (coreSwitch) positions[coreSwitch.id] = { x: coreX, y: switchY };
+    if (assemblySwitch) positions[assemblySwitch.id] = { x: assemblyX, y: switchY };
+    if (utilitySwitch) positions[utilitySwitch.id] = { x: utilityX, y: switchY };
+
+    // Fallback for any unrecognized switches
+    topologyModel.dataPlaneSwitches.forEach((sw) => {
+      if (!positions[sw.id]) {
+        positions[sw.id] = { x: coreX, y: switchY };
+      }
+    });
+
+    // 2. Map hosts to their connected parent switches
+    const getParentSwitchId = (endpointId) => {
+      const link = topologyModel.links.find(
+        (l) => l.destination?.switch === endpointId || l.source?.switch === endpointId
+      );
+      if (!link) return null;
+      return link.source?.switch === endpointId ? link.destination?.switch : link.source?.switch;
     };
 
-    positions.__controller = { x: 400, y: 70 };
-    spread(topologyModel.dataPlaneSwitches, 225, 180, 620);
-    spread(topologyModel.factoryEndpoints, 385, 140, 500);
-    spread(topologyModel.userEndpoints, 385, 560, 700);
+    const hostsBySwitch = {};
+    topologyModel.endpoints.forEach((host) => {
+      const parentId = getParentSwitchId(host.id);
+      if (parentId) {
+        if (!hostsBySwitch[parentId]) {
+          hostsBySwitch[parentId] = [];
+        }
+        hostsBySwitch[parentId].push(host);
+      }
+    });
+
+    // 3. Center-spread the connected hosts symmetrically underneath each switch's x-coordinate
+    Object.keys(hostsBySwitch).forEach((switchId) => {
+      const switchPos = positions[switchId];
+      if (!switchPos) return;
+
+      const hosts = hostsBySwitch[switchId];
+      // Sort hosts by ID to maintain a consistent order
+      hosts.sort((a, b) => a.id.localeCompare(b.id));
+
+      const hostY = 385;
+      const hostSpread = 120; // Horizontal distance between endpoints under the same switch
+      const totalWidth = (hosts.length - 1) * hostSpread;
+      const startX = switchPos.x - totalWidth / 2;
+
+      hosts.forEach((host, idx) => {
+        positions[host.id] = {
+          x: startX + idx * hostSpread,
+          y: hostY,
+        };
+      });
+    });
+
+    // Fallback for any orphaned hosts
+    const orphanedHosts = topologyModel.endpoints.filter((host) => !positions[host.id]);
+    if (orphanedHosts.length > 0) {
+      orphanedHosts.forEach((host, idx) => {
+        const step = orphanedHosts.length > 1 ? 400 / (orphanedHosts.length - 1) : 0;
+        positions[host.id] = {
+          x: orphanedHosts.length > 1 ? 200 + idx * step : 400,
+          y: 385,
+        };
+      });
+    }
+
     return positions;
-  }, [topologyModel.dataPlaneSwitches, topologyModel.factoryEndpoints, topologyModel.userEndpoints]);
+  }, [topologyModel.dataPlaneSwitches, topologyModel.endpoints, topologyModel.links]);
 
   if (loading && !topology) {
     return (
@@ -308,6 +589,13 @@ export default function NetworkMap() {
                         <feMergeNode in="SourceGraphic" />
                       </feMerge>
                     </filter>
+                    <filter id="attackGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
                   </defs>
 
                   <text x="36" y="36" fontSize="12" fontWeight="700" fill={COLORS.text.tertiary}>CONTROL PLANE</text>
@@ -332,33 +620,36 @@ export default function NetworkMap() {
                     );
                   })}
 
-                  {topologyModel.links.map((link, idx) => {
-                    const sourcePos = nodePositions[link.source.switch];
-                    const destPos = nodePositions[link.destination.switch];
-                    if (!sourcePos || !destPos) return null;
-                    return (
-                      <g key={`link-${idx}`}>
-                        <line
-                          x1={sourcePos.x}
-                          y1={sourcePos.y}
-                          x2={destPos.x}
-                          y2={destPos.y}
-                          stroke={COLORS.accent.cyan}
-                          strokeWidth="2"
-                          opacity="0.65"
-                        />
-                        <text
-                          x={(sourcePos.x + destPos.x) / 2}
-                          y={(sourcePos.y + destPos.y) / 2 - 10}
-                          fontSize="11"
-                          fill={COLORS.text.tertiary}
-                          textAnchor="middle"
-                        >
-                          {link.source.port} - {link.destination.port}
-                        </text>
-                      </g>
-                    );
-                  })}
+                  {/* Standard Switch and Endpoints links (hiding attacker's line in neutral state) */}
+                  {topologyModel.links
+                    .filter((link) => link.source.switch !== 'h_attacker' && link.destination.switch !== 'h_attacker')
+                    .map((link, idx) => {
+                      const sourcePos = nodePositions[link.source.switch];
+                      const destPos = nodePositions[link.destination.switch];
+                      if (!sourcePos || !destPos) return null;
+                      return (
+                        <g key={`link-${idx}`}>
+                          <line
+                            x1={sourcePos.x}
+                            y1={sourcePos.y}
+                            x2={destPos.x}
+                            y2={destPos.y}
+                            stroke={COLORS.accent.cyan}
+                            strokeWidth="2"
+                            opacity="0.65"
+                          />
+                          <text
+                            x={(sourcePos.x + destPos.x) / 2}
+                            y={(sourcePos.y + destPos.y) / 2 - 10}
+                            fontSize="11"
+                            fill={COLORS.text.tertiary}
+                            textAnchor="middle"
+                          >
+                            {link.source.port} - {link.destination.port}
+                          </text>
+                        </g>
+                      );
+                    })}
 
                   <ControllerNode position={nodePositions.__controller} />
 
@@ -379,8 +670,22 @@ export default function NetworkMap() {
                       position={nodePositions[node.id]}
                       selected={selectedNodeId === node.id}
                       onSelect={() => setSelectedNodeId(node.id)}
+                      isAttacking={node.id === threatSourceNodeId}
                     />
                   ))}
+
+                  {/* Dynamic attack path is drawn last so it stays visible over endpoint icons. */}
+                  {activeAttack && threatSourceNodeId && victimNodeIds
+                    .filter((victimId) => victimId !== threatSourceNodeId)
+                    .map((victimId) => (
+                      <AttackPathLine
+                        key={`attack-path-${victimId}`}
+                        attackerId={threatSourceNodeId}
+                        victimId={victimId}
+                        nodePositions={nodePositions}
+                        attackType={getDisplayAttackType(activeAttack)}
+                      />
+                    ))}
                 </svg>
               </div>
 
@@ -575,25 +880,133 @@ function SwitchNode({ node, position, selected, onSelect }) {
   );
 }
 
-function EndpointNode({ node, position, selected, onSelect }) {
+function EndpointNode({ node, position, selected, onSelect, isAttacking }) {
   if (!position) return null;
   const { classification } = node;
+  const Icon = classification.Icon;
   return (
     <g onClick={onSelect} style={{ cursor: 'pointer' }}>
+      {isAttacking && (
+        <circle
+          cx={position.x}
+          cy={position.y}
+          r="26"
+          fill="none"
+          stroke={COLORS.status.danger}
+          strokeWidth="2.5"
+          opacity="0.85"
+        >
+          <animate
+            attributeName="r"
+            values="26;38"
+            dur="1.5s"
+            repeatCount="indefinite"
+          />
+          <animate
+            attributeName="opacity"
+            values="0.85;0"
+            dur="1.5s"
+            repeatCount="indefinite"
+          />
+        </circle>
+      )}
       <circle
         cx={position.x}
         cy={position.y}
-        r="38"
+        r="26"
         fill={selected ? classification.bg : COLORS.background.card}
-        stroke={selected ? classification.accent : classification.border}
+        stroke={selected ? (isAttacking ? COLORS.status.danger : classification.accent) : (isAttacking ? COLORS.status.danger : classification.border)}
         strokeWidth={selected ? '3' : '2'}
       />
-      <text x={position.x} y={position.y - 9} fontSize="12" fontWeight="700" fill={classification.accent} textAnchor="middle">
+      {Icon && (
+        <g transform={`translate(${position.x - 10}, ${position.y - 10})`} style={{ pointerEvents: 'none' }}>
+          <Icon size={20} style={{ color: selected ? (isAttacking ? COLORS.status.danger : classification.accent) : (isAttacking ? COLORS.status.danger : COLORS.text.secondary) }} />
+        </g>
+      )}
+      <text x={position.x} y={position.y + 44} fontSize="11" fontWeight="700" fill={COLORS.text.primary} textAnchor="middle">
         {node.name}
       </text>
-      <text x={position.x} y={position.y + 10} fontSize="10" fill={COLORS.text.secondary} textAnchor="middle">
+      <text x={position.x} y={position.y + 57} fontSize="9" fill={COLORS.text.tertiary} textAnchor="middle" opacity="0.8">
         {classification.subtype}
       </text>
+    </g>
+  );
+}
+
+function AttackPathLine({ attackerId, victimId, nodePositions, attackType }) {
+  const attackerPos = nodePositions[attackerId];
+  const victimPos = nodePositions[victimId];
+  if (!attackerPos || !victimPos) return null;
+
+  const midX = (attackerPos.x + victimPos.x) / 2;
+  const midY = (attackerPos.y + victimPos.y) / 2;
+
+  return (
+    <g>
+      {/* Outer pulsing red beam glow */}
+      <line
+        x1={attackerPos.x}
+        y1={attackerPos.y}
+        x2={victimPos.x}
+        y2={victimPos.y}
+        stroke={COLORS.status.danger}
+        strokeWidth="4"
+        strokeDasharray="6 4"
+        filter="url(#attackGlow)"
+        opacity="0.85"
+      >
+        <animate
+          attributeName="stroke-dashoffset"
+          values="40;0"
+          dur="1.2s"
+          repeatCount="indefinite"
+        />
+      </line>
+
+      {/* Inner sharp red line */}
+      <line
+        x1={attackerPos.x}
+        y1={attackerPos.y}
+        x2={victimPos.x}
+        y2={victimPos.y}
+        stroke="#ff8a8a"
+        strokeWidth="1.5"
+        strokeDasharray="6 4"
+        opacity="0.95"
+      >
+        <animate
+          attributeName="stroke-dashoffset"
+          values="40;0"
+          dur="1.2s"
+          repeatCount="indefinite"
+        />
+      </line>
+
+      {/* Midpoint glowing badge showing attack type */}
+      <g>
+        <rect
+          x={midX - 60}
+          y={midY - 10}
+          width="120"
+          height="20"
+          rx="4"
+          fill={COLORS.background.card}
+          stroke={COLORS.status.danger}
+          strokeWidth="1.5"
+          filter="url(#nodeGlow)"
+        />
+        <text
+          x={midX}
+          y={midY + 4}
+          fill={COLORS.status.danger}
+          fontSize="9"
+          fontWeight="900"
+          textAnchor="middle"
+          letterSpacing="0.5px"
+        >
+          {attackType || 'ACTIVE ATTACK'}
+        </text>
+      </g>
     </g>
   );
 }
