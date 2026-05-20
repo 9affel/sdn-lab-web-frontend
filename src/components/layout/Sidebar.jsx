@@ -66,13 +66,10 @@ export default function Sidebar() {
               <Shield className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-base font-black tracking-tighter text-white uppercase text-nowrap">SDN-EDR</h1>
-                <div className="px-1 py-0.5 rounded-sm bg-cyan-500/20 border border-cyan-500/30">
-                  <span className="text-[8px] font-black text-cyan-400">PRO</span>
-                </div>
+              <div className="flex flex-col gap-1">
+                <h1 className="text-[10px] font-black tracking-wider text-white uppercase leading-tight">Software Defined Network</h1>
+                <h2 className="text-xs font-black tracking-widest text-cyan-400 uppercase leading-none">Dashboard</h2>
               </div>
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Enterprise Console</p>
             </div>
           </Link>
         </div>

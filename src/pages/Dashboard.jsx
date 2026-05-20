@@ -7,10 +7,11 @@ import {
   Cpu,
   Shield,
   Brain,
+  Activity,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
-import { getDashboardMetrics, getMetricsHistory, getAttackSummary, getModels } from "../api/services";
+import { getDashboardMetrics, getMetricsHistory, getAttackSummary, getAttacks, getModels } from "../api/services";
 import { COLORS, withAlpha } from "../design-system/constants";
 import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
 
@@ -36,6 +37,21 @@ const formatPercentMetric = (value) => {
   return score === null ? "N/A" : `${(score * 100).toFixed(1)}%`;
 };
 
+
+// ── Benign / normal-traffic labels that must NOT count as attacks ─────────────
+const BENIGN_CLASSES = new Set([
+  'benign', 'normal', 'no_attack', 'no attack', 'none',
+  'allow', 'allowed', 'unknown', 'normal_traffic',
+]);
+
+const getAttackClass = (attack) =>
+  `${attack?.type || attack?.attack_type || attack?.ai_analysis?.attack_class || ''}`
+    .trim().toLowerCase().replace(/\s+/g, '_');
+
+const isBenign = (attack) => {
+  const cls = getAttackClass(attack);
+  return !cls || BENIGN_CLASSES.has(cls);
+};
 
 // ── Default metrics shape (prevents "Failed to load" on cold start) ──────────
 const DEFAULT_METRICS = {
@@ -178,6 +194,7 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [attackSummary, setAttackSummary] = useState(null);
+  const [benignTraffic, setBenignTraffic] = useState([]);
 
   const { data: wsMetrics, status: wsStatus } = useSDNWebSocket('/metrics');
 
@@ -198,9 +215,10 @@ export default function Dashboard() {
   }, []);
 
   const fetchMetrics = useCallback(async () => {
-    const [metricsRes, summaryRes] = await Promise.allSettled([
+    const [metricsRes, summaryRes, attacksRes] = await Promise.allSettled([
       getDashboardMetrics(),
       getAttackSummary(),
+      getAttacks(200, 0, 3600),
     ]);
 
     if (metricsRes.status === 'fulfilled' && metricsRes.value.data) {
@@ -211,9 +229,22 @@ export default function Dashboard() {
       setError("Backend not reachable. Retrying...");
     }
 
-    if (summaryRes.status === 'fulfilled' && summaryRes.value.data) {
-      setAttackSummary(summaryRes.value.data);
-    }
+    // Build an attack summary that excludes benign / normal traffic
+    const rawSummary = summaryRes.status === 'fulfilled' ? summaryRes.value.data : null;
+    const recentAttacks = attacksRes.status === 'fulfilled'
+      ? (attacksRes.value.data?.attacks || [])
+      : [];
+
+    const realThreats = recentAttacks.filter((a) => !isBenign(a));
+    const benignEntries = recentAttacks.filter((a) => isBenign(a));
+    const blockedThreats = realThreats.filter((a) => a.blocked || a.mitigated || a.resolved);
+
+    setBenignTraffic(benignEntries);
+    setAttackSummary({
+      ...(rawSummary || {}),
+      total_attacks: realThreats.length,
+      blocked: blockedThreats.length,
+    });
   }, [metrics]);
 
   useEffect(() => {
@@ -286,7 +317,7 @@ export default function Dashboard() {
     {
       title: "Security Status",
       value: `${attackSummary?.blocked || safe(m, 'security.attacks_blocked_hour')}/${attackSummary?.total_attacks || safe(m, 'security.attacks_detected_hour')}`,
-      subtitle: `${safe(m, 'security.defense_success_rate', 100).toFixed(0)}% Block Rate`,
+      subtitle: `${safe(m, 'security.defense_success_rate', 100).toFixed(0)}% Block Rate (excl. benign)`,
       icon: Shield,
       color: COLORS.status.success,
     },
@@ -318,7 +349,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter">NETWORK COMMAND CENTER</h1>
+          <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter">SOFTWARE DEFINED NETWORK DASHBOARD</h1>
           <p style={{ color: COLORS.text.secondary }}>Industrial SDN-EDR Real-time Telemetry</p>
         </div>
         <div className="flex items-center gap-4">
@@ -388,6 +419,77 @@ export default function Dashboard() {
               { key: "bytes_per_sec", color: COLORS.status.success, name: "MB/S RATE" },
             ]}
           />
+        </CardContent>
+      </Card>
+
+      {/* Benign / Normal Traffic Table */}
+      <Card style={{ borderColor: withAlpha(COLORS.status.success, '20') }}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+              <Activity className="w-4 h-4" style={{ color: COLORS.status.success }} />
+              Benign Traffic Log ({benignTraffic.length})
+            </CardTitle>
+            <Badge variant="outline" className="border-dashed opacity-50" style={{ color: COLORS.text.tertiary }}>NORMAL</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {benignTraffic.length === 0 ? (
+            <p className="text-sm py-6 text-center" style={{ color: COLORS.text.tertiary }}>No benign traffic entries recorded in the last hour.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border" style={{ borderColor: withAlpha(COLORS.border.light, 'FF') }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ backgroundColor: withAlpha(COLORS.status.success, '08') }}>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest" style={{ color: COLORS.text.tertiary, borderBottom: `1px solid ${withAlpha(COLORS.border.light, 'FF')}` }}>Time</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest" style={{ color: COLORS.text.tertiary, borderBottom: `1px solid ${withAlpha(COLORS.border.light, 'FF')}` }}>Source IP</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest" style={{ color: COLORS.text.tertiary, borderBottom: `1px solid ${withAlpha(COLORS.border.light, 'FF')}` }}>Destination IP</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest" style={{ color: COLORS.text.tertiary, borderBottom: `1px solid ${withAlpha(COLORS.border.light, 'FF')}` }}>Classification</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest" style={{ color: COLORS.text.tertiary, borderBottom: `1px solid ${withAlpha(COLORS.border.light, 'FF')}` }}>Protocol</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {benignTraffic.slice(0, 20).map((entry, idx) => (
+                    <tr
+                      key={entry._id || entry.id || idx}
+                      className="transition-colors"
+                      style={{ backgroundColor: idx % 2 === 0 ? 'transparent' : withAlpha(COLORS.background.hover, '33') }}
+                    >
+                      <td className="px-4 py-2.5 font-mono text-xs" style={{ color: COLORS.text.secondary }}>
+                        {entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs" style={{ color: COLORS.text.primary }}>
+                        {entry.source_ip || entry.src_ip || '—'}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs" style={{ color: COLORS.text.primary }}>
+                        {entry.destination_ip || entry.dst_ip || '—'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-black uppercase tracking-widest"
+                          style={{
+                            backgroundColor: withAlpha(COLORS.status.success, '10'),
+                            borderColor: withAlpha(COLORS.status.success, '30'),
+                            color: COLORS.status.success,
+                          }}
+                        >
+                          {(entry.type || entry.attack_type || entry.ai_analysis?.attack_class || 'Benign').replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs" style={{ color: COLORS.text.tertiary }}>
+                        {entry.protocol || entry.ip_protocol || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {benignTraffic.length > 20 && (
+                <div className="px-4 py-2 text-center text-xs" style={{ color: COLORS.text.tertiary, borderTop: `1px solid ${withAlpha(COLORS.border.light, 'FF')}` }}>
+                  Showing 20 of {benignTraffic.length} benign entries
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

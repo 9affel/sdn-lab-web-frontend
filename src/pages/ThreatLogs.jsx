@@ -45,6 +45,21 @@ const getSeverityStyle = (severity) => {
   return severityStyles[key] || severityStyles.low;
 };
 
+// ── Benign / normal-traffic labels that must NOT count as attacks ─────────────
+const BENIGN_CLASSES = new Set([
+  'benign', 'normal', 'no_attack', 'no attack', 'none',
+  'allow', 'allowed', 'unknown', 'normal_traffic',
+]);
+
+const getAttackClass = (attack) =>
+  `${attack?.type || attack?.attack_type || attack?.ai_analysis?.attack_class || ''}`
+    .trim().toLowerCase().replace(/\s+/g, '_');
+
+const isBenign = (attack) => {
+  const cls = getAttackClass(attack);
+  return !cls || BENIGN_CLASSES.has(cls);
+};
+
 export default function ThreatLogs() {
   const [attacks, setAttacks] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -52,6 +67,7 @@ export default function ThreatLogs() {
   const [expandedRow, setExpandedRow] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
+  const [showBenign, setShowBenign] = useState(false);
   const [error, setError] = useState(null);
 
   const { data: wsAttackData, status: wsStatus } = useSDNWebSocket('/attacks');
@@ -103,6 +119,8 @@ export default function ThreatLogs() {
   }, [wsAttackData]);
 
   const filteredAttacks = attacks.filter((attack) => {
+    if (!showBenign && isBenign(attack)) return false;
+    
     const matchesSearch =
       attack.source_ip?.includes(searchTerm) ||
       attack.destination_ip?.includes(searchTerm) ||
@@ -259,17 +277,28 @@ export default function ThreatLogs() {
                 className="w-full h-10 pl-9 pr-4 rounded-lg bg-input border border-cyan-500/20 text-sm text-white placeholder:text-muted focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors"
               />
             </div>
-            <select
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
-              className="h-10 px-4 rounded-lg bg-input border border-cyan-500/20 text-sm text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors"
-            >
-              <option value="all">All Severities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white transition-colors">
+                <input
+                  type="checkbox"
+                  checked={showBenign}
+                  onChange={(e) => setShowBenign(e.target.checked)}
+                  className="rounded border-cyan-500/20 bg-input/50 text-cyan focus:ring-cyan/30"
+                />
+                Show Normal Traffic
+              </label>
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="h-10 px-4 rounded-lg bg-input border border-cyan-500/20 text-sm text-white focus:outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors"
+              >
+                <option value="all">All Severities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
           </div>
         </CardContent>
       </Card>
