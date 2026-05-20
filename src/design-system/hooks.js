@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react';
-import { COLORS, CARD_VARIANTS, STATUS_COLOR_MAP } from './constants';
+import { COLORS, CARD_VARIANTS, STATUS_COLOR_MAP, withAlpha } from './constants';
 
 /**
  * Get card variant styles based on variant name
@@ -29,31 +29,31 @@ export const useStatusColor = (status) => {
     const colorMap = {
       red: {
         main: COLORS.status.danger,
-        hex: '#E74C3C',
-        bg: 'rgba(231, 76, 60, 0.08)',
-        border: 'rgba(231, 76, 60, 0.3)',
-        text: '#E74C3C',
+        hex: COLORS.status.danger,
+        bg: withAlpha(COLORS.status.danger, '14'),
+        border: withAlpha(COLORS.status.danger, '4D'),
+        text: COLORS.status.danger,
       },
       green: {
         main: COLORS.status.success,
-        hex: '#0A4A3F',
-        bg: 'rgba(10, 74, 63, 0.15)',
-        border: 'rgba(10, 74, 63, 0.4)',
-        text: '#0A4A3F',
+        hex: COLORS.status.success,
+        bg: withAlpha(COLORS.status.success, '1F'),
+        border: withAlpha(COLORS.status.success, '59'),
+        text: COLORS.status.success,
       },
       amber: {
         main: COLORS.status.warning,
-        hex: '#F5A623',
-        bg: 'rgba(245, 166, 35, 0.08)',
-        border: 'rgba(245, 166, 35, 0.3)',
-        text: '#F5A623',
+        hex: COLORS.status.warning,
+        bg: withAlpha(COLORS.status.warning, '14'),
+        border: withAlpha(COLORS.status.warning, '4D'),
+        text: COLORS.status.warning,
       },
       cyan: {
         main: COLORS.accent.cyan,
-        hex: '#00D9C0',
-        bg: 'rgba(0, 217, 192, 0.08)',
-        border: 'rgba(0, 217, 192, 0.3)',
-        text: '#00D9C0',
+        hex: COLORS.accent.cyan,
+        bg: withAlpha(COLORS.accent.cyan, '14'),
+        border: withAlpha(COLORS.accent.cyan, '4D'),
+        text: COLORS.accent.cyan,
       },
     };
     return colorMap[colorKey];

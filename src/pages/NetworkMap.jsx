@@ -15,10 +15,8 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { getTopology, getAttacks, getDashboardMetrics } from '../api/services';
-import { COLORS } from '../design-system/constants';
+import { COLORS, withAlpha } from '../design-system/constants';
 import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
-
-const withAlpha = (color, alphaHex) => `${color}${alphaHex}`;
 
 const styles = {
   cardBorder: withAlpha(COLORS.accent.cyan, '33'),
@@ -969,7 +967,7 @@ function AttackPathLine({ attackerId, victimId, nodePositions, attackType }) {
         y1={attackerPos.y}
         x2={victimPos.x}
         y2={victimPos.y}
-        stroke="#ff8a8a"
+        stroke={withAlpha(COLORS.status.danger, '99')}
         strokeWidth="1.5"
         strokeDasharray="6 4"
         opacity="0.95"

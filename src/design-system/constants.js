@@ -7,42 +7,42 @@
 export const COLORS = {
   // Backgrounds & Surfaces
   background: {
-    primary: '#09090b', // zinc-950
-    card: '#18181b', // zinc-900
-    sidebar: '#09090b',
-    hover: '#27272a', // zinc-800
-    input: '#18181b',
+    primary: 'rgb(var(--color-bg-primary-rgb))',
+    card: 'rgb(var(--color-bg-card-rgb))',
+    sidebar: 'rgb(var(--color-bg-sidebar-rgb))',
+    hover: 'rgb(var(--color-bg-hover-rgb))',
+    input: 'rgb(var(--color-bg-input-rgb))',
   },
 
   // Accent Colors
   accent: {
-    cyan: '#00D9C0',
-    cyanLight: '#1DD3C3',
-    cyanDark: '#00a89f',
+    cyan: 'rgb(var(--color-accent-cyan-rgb))',
+    cyanLight: 'rgb(var(--color-accent-cyan-light-rgb))',
+    cyanDark: 'rgb(var(--color-accent-cyan-dark-rgb))',
   },
 
   // Status Colors - Semantic
   status: {
-    success: '#10B981', // Brighter Emerald-500 for better visibility
-    warning: '#F5A623',
-    danger: '#E74C3C',
-    critical: '#8B3A3A',
-    neutral: '#6B7280',
+    success: 'rgb(var(--color-status-success-rgb))',
+    warning: 'rgb(var(--color-status-warning-rgb))',
+    danger: 'rgb(var(--color-status-danger-rgb))',
+    critical: 'rgb(var(--color-status-critical-rgb))',
+    neutral: 'rgb(var(--color-status-neutral-rgb))',
   },
 
   // Text Colors
   text: {
-    primary: '#FFFFFF',
-    secondary: '#9CA3AF',
-    tertiary: '#6B7280',
-    muted: '#A0AEC0',
+    primary: 'rgb(var(--color-text-primary-rgb))',
+    secondary: 'rgb(var(--color-text-secondary-rgb))',
+    tertiary: 'rgb(var(--color-text-tertiary-rgb))',
+    muted: 'rgb(var(--color-text-muted-rgb))',
   },
 
   // Borders & Dividers
   border: {
-    light: 'rgba(255, 255, 255, 0.05)',
-    lighter: 'rgba(255, 255, 255, 0.02)',
-    default: '#27272a', // zinc-800
+    light: 'rgb(var(--color-border-light-rgb) / 0.12)',
+    lighter: 'rgb(var(--color-border-light-rgb) / 0.06)',
+    default: 'rgb(var(--color-border-default-rgb))',
   },
 };
 
@@ -99,16 +99,16 @@ export const BORDER_RADIUS = {
 
 // Box Shadows
 export const SHADOWS = {
-  sm: '0 1px 2px rgba(0, 0, 0, 0.3)',
-  md: '0 4px 12px rgba(0, 0, 0, 0.3)',
-  lg: '0 8px 16px rgba(0, 0, 0, 0.4)',
-  xl: '0 12px 24px rgba(0, 0, 0, 0.5)',
-  card: '0 4px 12px rgba(0, 0, 0, 0.3)',
-  cardHover: '0 8px 24px rgba(0, 0, 0, 0.4)',
-  glowCyan: '0 0 20px rgba(0, 217, 192, 0.1)',
-  glowCyanHover: '0 0 30px rgba(0, 217, 192, 0.2)',
-  glowRed: '0 0 20px rgba(231, 76, 60, 0.1)',
-  glowRedHover: '0 0 30px rgba(231, 76, 60, 0.15)',
+  sm: 'var(--shadow-sm)',
+  md: 'var(--shadow-md)',
+  lg: 'var(--shadow-lg)',
+  xl: 'var(--shadow-xl)',
+  card: 'var(--shadow-card)',
+  cardHover: 'var(--shadow-card-hover)',
+  glowCyan: '0 0 20px rgb(var(--color-accent-cyan-rgb) / 0.1)',
+  glowCyanHover: '0 0 30px rgb(var(--color-accent-cyan-rgb) / 0.18)',
+  glowRed: '0 0 20px rgb(var(--color-status-danger-rgb) / 0.1)',
+  glowRedHover: '0 0 30px rgb(var(--color-status-danger-rgb) / 0.15)',
 };
 
 // Z-Index Scale
@@ -148,24 +148,24 @@ export const CARD_VARIANTS = {
     boxShadow: SHADOWS.card,
   },
   cyan: {
-    backgroundColor: 'rgba(0, 217, 192, 0.08)',
-    borderColor: 'rgba(0, 217, 192, 0.3)',
-    boxShadow: `${SHADOWS.card}, 0 0 20px rgba(0, 217, 192, 0.1)`,
+    backgroundColor: 'rgb(var(--color-accent-cyan-rgb) / 0.08)',
+    borderColor: 'rgb(var(--color-accent-cyan-rgb) / 0.3)',
+    boxShadow: `${SHADOWS.card}, 0 0 20px rgb(var(--color-accent-cyan-rgb) / 0.1)`,
   },
   red: {
-    backgroundColor: 'rgba(231, 76, 60, 0.08)',
-    borderColor: 'rgba(231, 76, 60, 0.3)',
-    boxShadow: `${SHADOWS.card}, 0 0 20px rgba(231, 76, 60, 0.1)`,
+    backgroundColor: 'rgb(var(--color-status-danger-rgb) / 0.08)',
+    borderColor: 'rgb(var(--color-status-danger-rgb) / 0.3)',
+    boxShadow: `${SHADOWS.card}, 0 0 20px rgb(var(--color-status-danger-rgb) / 0.1)`,
   },
   green: {
-    backgroundColor: 'rgba(10, 74, 63, 0.15)',
-    borderColor: 'rgba(10, 74, 63, 0.4)',
-    boxShadow: `${SHADOWS.card}, 0 0 20px rgba(10, 74, 63, 0.1)`,
+    backgroundColor: 'rgb(var(--color-status-success-rgb) / 0.12)',
+    borderColor: 'rgb(var(--color-status-success-rgb) / 0.35)',
+    boxShadow: `${SHADOWS.card}, 0 0 20px rgb(var(--color-status-success-rgb) / 0.1)`,
   },
   amber: {
-    backgroundColor: 'rgba(245, 166, 35, 0.08)',
-    borderColor: 'rgba(245, 166, 35, 0.3)',
-    boxShadow: `${SHADOWS.card}, 0 0 20px rgba(245, 166, 35, 0.1)`,
+    backgroundColor: 'rgb(var(--color-status-warning-rgb) / 0.08)',
+    borderColor: 'rgb(var(--color-status-warning-rgb) / 0.3)',
+    boxShadow: `${SHADOWS.card}, 0 0 20px rgb(var(--color-status-warning-rgb) / 0.1)`,
   },
 };
 
@@ -184,10 +184,22 @@ export const STATUS_COLOR_MAP = {
   inactive: 'amber',
 };
 
+const alphaHexToDecimal = (alphaHex) => {
+  const alpha = parseInt(alphaHex, 16);
+  if (Number.isNaN(alpha)) return 1;
+  return Math.max(0, Math.min(1, alpha / 255));
+};
+
 /**
  * Utility to add alpha transparency to a hex color
  * @param {string} color - Hex color code (e.g. #00D9C0)
  * @param {string} alphaHex - 2-character hex alpha (e.g. 1A for 10%)
  * @returns {string} - Combined color string
  */
-export const withAlpha = (color, alphaHex) => `${color}${alphaHex}`;
+export const withAlpha = (color, alphaHex) => {
+  if (color?.startsWith('rgb(var(')) {
+    return color.replace('))', `) / ${alphaHexToDecimal(alphaHex)})`);
+  }
+
+  return `${color}${alphaHex}`;
+};

@@ -5,7 +5,7 @@ import {
   Activity,
   Network,
   Settings,
-  LogOut,
+
   Menu,
   X,
   Shield,
@@ -13,9 +13,7 @@ import {
   Brain,
   Zap
 } from "lucide-react";
-import { COLORS } from "../../design-system/constants";
-
-const withAlpha = (color, alphaHex) => `${color}${alphaHex}`;
+import { COLORS, withAlpha } from "../../design-system/constants";
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(true);
@@ -41,6 +39,7 @@ export default function Sidebar() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-cyan-500/50 transition-colors"
+        style={{ backgroundColor: COLORS.background.card, borderColor: withAlpha(COLORS.accent.cyan, '25') }}
       >
         {isOpen ? (
           <X className="w-5 h-5 text-cyan-400" />
@@ -55,9 +54,9 @@ export default function Sidebar() {
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
-          backgroundColor: '#09090b', // Zinc-950
+          backgroundColor: COLORS.background.sidebar,
           borderRightColor: sidebarOutline,
-          boxShadow: "10px 0 30px rgba(0, 0, 0, 0.4)",
+          boxShadow: "var(--shadow-lg)",
         }}
       >
         {/* Branding Section */}
@@ -128,13 +127,7 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Footer / Logout */}
-        <div className="p-4 border-t border-zinc-900">
-          <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/5 transition-all duration-200 font-bold text-xs group uppercase tracking-widest">
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out
-          </button>
-        </div>
+
       </aside>
     </>
   );

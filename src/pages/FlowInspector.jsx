@@ -39,14 +39,22 @@ const styles = {
   monoText: 'font-mono text-[13px]',
 };
 
+const ROLE_COLORS = {
+  core: COLORS.status.danger,
+  learned: COLORS.accent.cyan,
+  whitelist: COLORS.status.success,
+  labScope: COLORS.accent.cyan,
+  default: COLORS.text.tertiary,
+};
+
 const getFlowRole = (priority) => {
   const p = parseInt(priority);
-  if (p >= 65535) return { label: 'CORE', color: '#FF4D4D' }; // Bright Red
-  if (p === 100) return { label: 'LEARNED', color: COLORS.accent.cyan }; // Base Cyan
-  if (p === 10) return { label: 'WHITELIST', color: '#4ADE80' }; // Bright Green
-  if (p === 5) return { label: 'LAB_SCOPE', color: COLORS.accent.cyanLight || '#22D3EE' };
-  if (p === 0) return { label: 'DEFAULT', color: COLORS.text.tertiary };
-  return { label: 'CUSTOM', color: COLORS.accent.cyan };
+  if (p >= 65535) return { label: 'CORE', color: ROLE_COLORS.core };
+  if (p === 100) return { label: 'LEARNED', color: ROLE_COLORS.learned };
+  if (p === 10) return { label: 'WHITELIST', color: ROLE_COLORS.whitelist };
+  if (p === 5) return { label: 'LAB_SCOPE', color: ROLE_COLORS.labScope };
+  if (p === 0) return { label: 'DEFAULT', color: ROLE_COLORS.default };
+  return { label: 'CUSTOM', color: ROLE_COLORS.learned };
 };
 
 export default function FlowInspector() {
@@ -209,7 +217,7 @@ export default function FlowInspector() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <StatBox icon={Layers} label="Active Rules" value={activeRules} color={COLORS.accent.cyan} />
             <StatBox icon={TrendingUp} label="Flow Density" value={`${Math.min(100, (totalFlows / 2000 * 100)).toFixed(1)}%`} color={COLORS.status.warning} />
-            <StatBox icon={ShieldCheck} label="Secure Rules" value={secureRules} color="#4ADE80" />
+            <StatBox icon={ShieldCheck} label="Secure Rules" value={secureRules} color={ROLE_COLORS.whitelist} />
           </div>
 
           <Card style={{ borderColor: styles.cardBorder, backgroundColor: styles.panel }}>
@@ -225,7 +233,7 @@ export default function FlowInspector() {
                   <XAxis dataKey="priority" stroke={COLORS.text.tertiary} fontSize={9} />
                   <YAxis stroke={COLORS.text.tertiary} fontSize={9} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: COLORS.background.card, borderColor: styles.cardBorder, borderRadius: '8px', color: '#fff' }}
+                    contentStyle={{ backgroundColor: COLORS.background.card, borderColor: styles.cardBorder, borderRadius: '8px', color: COLORS.text.primary }}
                     itemStyle={{ color: COLORS.accent.cyan }}
                   />
                   <Bar dataKey="count" radius={[2, 2, 0, 0]}>
@@ -253,7 +261,7 @@ export default function FlowInspector() {
                   onClick={() => handleRoleFilter('System')}
                   className={`cursor-pointer font-bold transition-all ${selectedRole === 'System' ? 'scale-110 shadow-glow-cyan brightness-125' : 'opacity-60 hover:opacity-100'}`} 
                   variant="outline" 
-                  style={{ borderColor: '#FF4D4D', color: '#FF4D4D', backgroundColor: selectedRole === 'System' ? 'rgba(255, 77, 77, 0.1)' : 'transparent' }}
+                  style={{ borderColor: ROLE_COLORS.core, color: ROLE_COLORS.core, backgroundColor: selectedRole === 'System' ? withAlpha(ROLE_COLORS.core, '1A') : 'transparent' }}
                 >
                   System
                 </Badge>
@@ -261,7 +269,7 @@ export default function FlowInspector() {
                   onClick={() => handleRoleFilter('AI Mitigate')}
                   className={`cursor-pointer font-bold transition-all ${selectedRole === 'AI Mitigate' ? 'scale-110 shadow-glow-cyan brightness-125' : 'opacity-60 hover:opacity-100'}`} 
                   variant="outline" 
-                  style={{ borderColor: COLORS.accent.cyan, color: COLORS.accent.cyan, backgroundColor: selectedRole === 'AI Mitigate' ? 'rgba(0, 217, 192, 0.1)' : 'transparent' }}
+                  style={{ borderColor: COLORS.accent.cyan, color: COLORS.accent.cyan, backgroundColor: selectedRole === 'AI Mitigate' ? withAlpha(COLORS.accent.cyan, '1A') : 'transparent' }}
                 >
                   AI Mitigate
                 </Badge>
@@ -269,7 +277,7 @@ export default function FlowInspector() {
                   onClick={() => handleRoleFilter('Allow-List')}
                   className={`cursor-pointer font-bold transition-all ${selectedRole === 'Allow-List' ? 'scale-110 shadow-glow-cyan brightness-125' : 'opacity-60 hover:opacity-100'}`} 
                   variant="outline" 
-                  style={{ borderColor: '#4ADE80', color: '#4ADE80', backgroundColor: selectedRole === 'Allow-List' ? 'rgba(74, 222, 128, 0.1)' : 'transparent' }}
+                  style={{ borderColor: ROLE_COLORS.whitelist, color: ROLE_COLORS.whitelist, backgroundColor: selectedRole === 'Allow-List' ? withAlpha(ROLE_COLORS.whitelist, '1A') : 'transparent' }}
                 >
                   Allow-List
                 </Badge>
@@ -387,7 +395,7 @@ export default function FlowInspector() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-black" style={{ color: COLORS.text.primary }}>{flow.priority}</span>
-                            {isDrop && <Badge className="border text-[9px] px-1 font-black shadow-[0_0_10px_rgba(231,76,60,0.2)]" style={{ backgroundColor: 'rgba(231, 76, 60, 0.2)', color: '#FF4D4D', borderColor: 'rgba(231, 76, 60, 0.4)' }}>DROP</Badge>}
+                            {isDrop && <Badge className="border text-[9px] px-1 font-black shadow-[0_0_10px_rgba(231,76,60,0.2)]" style={{ backgroundColor: withAlpha(COLORS.status.danger, '33'), color: COLORS.status.danger, borderColor: withAlpha(COLORS.status.danger, '66') }}>DROP</Badge>}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -468,7 +476,7 @@ export default function FlowInspector() {
                                         {action}
                                       </div>
                                     )) : (
-                                      <div className="p-4 rounded border font-black text-center text-xs shadow-[0_0_20px_rgba(231,76,60,0.1)] transition-all" style={{ borderColor: 'rgba(231, 76, 60, 0.4)', backgroundColor: 'rgba(231, 76, 60, 0.1)', color: '#FF4D4D' }}>
+                                      <div className="p-4 rounded border font-black text-center text-xs shadow-[0_0_20px_rgba(231,76,60,0.1)] transition-all" style={{ borderColor: withAlpha(COLORS.status.danger, '66'), backgroundColor: withAlpha(COLORS.status.danger, '1A'), color: COLORS.status.danger }}>
                                         SECURITY BLOCK: Traffic Discarded (Explicit DROP)
                                       </div>
                                     )}
@@ -546,7 +554,7 @@ export default function FlowInspector() {
                 </ul>
               </div>
               <div className="space-y-3">
-                <h4 className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#FF4D4D' }}>Match & Actions</h4>
+                <h4 className="text-[10px] font-black uppercase tracking-widest" style={{ color: COLORS.status.danger }}>Match & Actions</h4>
                 <ul className="space-y-3">
                   <GlossaryItem term="Match Pattern" desc="The L2/L3 criteria (MAC, IP, Port) used to identify a flow. Wildcards indicate broader, less specific rules." />
                   <GlossaryItem term="Action: DROP" desc="A security instruction that tells the switch hardware to delete the packet immediately without processing." />
@@ -578,7 +586,7 @@ function StatBox({ icon: Icon, label, value, color }) {
 }
 
 function InsightItem({ icon: Icon, title, desc, type }) {
-  const color = type === 'success' ? '#4ADE80' : COLORS.status.warning;
+  const color = type === 'success' ? COLORS.status.success : COLORS.status.warning;
   return (
     <div className="flex gap-3 p-3.5 rounded-lg border transition-all hover:bg-white/5" style={{ borderColor: withAlpha(color, '33'), backgroundColor: withAlpha(color, '12') }}>
       <Icon className="w-4 h-4 mt-0.5" style={{ color }} />

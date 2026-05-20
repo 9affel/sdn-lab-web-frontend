@@ -10,32 +10,32 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { getAttacks, getAttackSummary } from '../api/services';
-import { COLORS } from '../design-system/constants';
+import { COLORS, withAlpha } from '../design-system/constants';
 import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
 
 const severityStyles = {
   critical: {
     text: COLORS.status.danger,
-    bg: `${COLORS.status.danger}14`,
-    border: `${COLORS.status.danger}47`,
+    bg: withAlpha(COLORS.status.danger, '14'),
+    border: withAlpha(COLORS.status.danger, '47'),
     dot: COLORS.status.danger,
   },
   high: {
     text: COLORS.status.danger,
-    bg: `${COLORS.status.danger}0F`,
-    border: `${COLORS.status.danger}38`,
+    bg: withAlpha(COLORS.status.danger, '0F'),
+    border: withAlpha(COLORS.status.danger, '38'),
     dot: COLORS.status.danger,
   },
   medium: {
     text: COLORS.status.warning,
-    bg: `${COLORS.status.warning}12`,
-    border: `${COLORS.status.warning}3D`,
+    bg: withAlpha(COLORS.status.warning, '12'),
+    border: withAlpha(COLORS.status.warning, '3D'),
     dot: COLORS.status.warning,
   },
   low: {
     text: COLORS.accent.cyan,
-    bg: `${COLORS.accent.cyan}0F`,
-    border: `${COLORS.accent.cyan}38`,
+    bg: withAlpha(COLORS.accent.cyan, '0F'),
+    border: withAlpha(COLORS.accent.cyan, '38'),
     dot: COLORS.accent.cyan,
   },
 };
@@ -116,7 +116,7 @@ export default function ThreatLogs() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: COLORS.status.danger + '40', borderTopColor: COLORS.status.danger }}></div>
+          <div className="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: withAlpha(COLORS.status.danger, '40'), borderTopColor: COLORS.status.danger }}></div>
           <p className="text-secondary">Loading threat data...</p>
         </div>
       </div>

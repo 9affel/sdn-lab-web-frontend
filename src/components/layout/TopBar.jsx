@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Bell, User, X, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Search, Bell, User, X, ShieldAlert, AlertTriangle, Sun, Moon } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import { COLORS, withAlpha } from '../../design-system/constants';
+import { useTheme } from '../../design-system/theme';
 
 const SEV_STYLE = {
   critical: { color: COLORS.status.danger,  icon: ShieldAlert, label: 'CRITICAL' },
@@ -109,6 +110,29 @@ function NotificationDropdown({ notifications, unreadCount, markAllRead, dismiss
   );
 }
 
+function ThemeToggle() {
+  const { theme, isLight, toggleTheme } = useTheme();
+  const Icon = isLight ? Moon : Sun;
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className="inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-[10px] font-black uppercase tracking-widest transition-all duration-200 hover:scale-[1.02]"
+      style={{
+        backgroundColor: withAlpha(COLORS.accent.cyan, isLight ? '0F' : '12'),
+        borderColor: withAlpha(COLORS.accent.cyan, '35'),
+        color: COLORS.accent.cyan,
+      }}
+      title={`Switch to ${isLight ? 'dark' : 'light'} mode`}
+      aria-label={`Switch to ${isLight ? 'dark' : 'light'} mode`}
+    >
+      <Icon className="h-4 w-4" />
+      <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+    </button>
+  );
+}
+
 export default function TopBar() {
   const { notifications, unreadCount, markAllRead, dismiss } = useNotifications();
   const [open, setOpen] = useState(false);
@@ -120,7 +144,7 @@ export default function TopBar() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b"
-      style={{ backgroundColor: '#09090b', borderColor: withAlpha(COLORS.accent.cyan, '1A') }}>
+      style={{ backgroundColor: COLORS.background.sidebar, borderColor: withAlpha(COLORS.accent.cyan, '1A') }}>
       <div className="flex items-center justify-between px-8 py-4">
 
         {/* Search */}
@@ -136,6 +160,7 @@ export default function TopBar() {
 
         {/* Right actions */}
         <div className="flex items-center gap-5 ml-auto">
+          <ThemeToggle />
 
           {/* Bell with badge */}
           <div className="relative">
@@ -148,7 +173,7 @@ export default function TopBar() {
               {unreadCount > 0 && (
                 <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 rounded-full flex items-center justify-center text-[9px] font-black px-0.5"
                   style={{ backgroundColor: COLORS.status.danger, color: '#fff',
-                           boxShadow: `0 0 8px ${COLORS.status.danger}80` }}>
+                           boxShadow: `0 0 8px ${withAlpha(COLORS.status.danger, '80')}` }}>
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
