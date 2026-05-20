@@ -158,6 +158,37 @@ export const getHealth = () => api.get('/api/v1/health');
 
 /**
  * ========================
+ * SETTINGS ENDPOINTS
+ * ========================
+ */
+
+/**
+ * Get all platform settings (security policy + data retention + network)
+ * GET /api/v1/settings
+ */
+export const getSettings = () => api.get('/api/v1/settings');
+
+/**
+ * Get only the active security policy
+ * GET /api/v1/settings/security
+ */
+export const getSecurityPolicy = () => api.get('/api/v1/settings/security');
+
+/**
+ * Update the active security policy
+ * PUT /api/v1/settings/security
+ */
+export const updateSecurityPolicy = (policy) => api.put('/api/v1/settings/security', policy);
+
+/**
+ * Update data retention settings
+ * PUT /api/v1/settings/data-retention
+ */
+export const updateDataRetention = (policy) => api.put('/api/v1/settings/data-retention', policy);
+
+
+/**
+ * ========================
  * MOCK DATA EXPORTS
  * ========================
  * Re-export centralized mock data generators

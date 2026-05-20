@@ -1,20 +1,17 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  Activity,
   AlertTriangle,
   Zap,
   Network,
   TrendingUp,
   Cpu,
-  HardDrive,
   Shield,
   Brain,
-  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { getDashboardMetrics, getMetricsHistory, getAttackSummary, getModels } from "../api/services";
-import { COLORS } from "../design-system/constants";
+import { COLORS, withAlpha } from "../design-system/constants";
 import { useSDNWebSocket } from '../hooks/useSDNWebSocket';
 
 // ── Safe accessor helpers ────────────────────────────────────────────────────
@@ -34,36 +31,29 @@ const metricAsRatio = (value) => {
   return Math.max(0, Math.min(1, numeric > 1 ? numeric / 100 : numeric));
 };
 
-const extractF1Score = (modelInfo) => {
-  const metrics = modelInfo?.metrics || {};
-  const candidates = [
-    modelInfo?.f1_score,
-    modelInfo?.f1,
-    modelInfo?.macro_f1,
-    modelInfo?.weighted_f1,
-    metrics.f1_score,
-    metrics.f1,
-    metrics.macro_f1,
-    metrics.weighted_f1,
-  ];
-
-  for (const candidate of candidates) {
-    const score = metricAsRatio(candidate);
-    if (score !== null) return score;
-  }
-
-  return null;
-};
-
 const formatPercentMetric = (value) => {
   const score = metricAsRatio(value);
   return score === null ? "N/A" : `${(score * 100).toFixed(1)}%`;
 };
 
+
 // ── Default metrics shape (prevents "Failed to load" on cold start) ──────────
 const DEFAULT_METRICS = {
   timestamp: new Date().toISOString(),
-  network: { total_packets: 0, total_bytes: 0, packet_rate_pps: 0, byte_rate_mbps: 0, active_flows: 0, port_utilization: 0 },
+  network: { 
+    total_packets: 0, 
+    total_bytes: 0, 
+    packet_rate_pps: 0, 
+    byte_rate_mbps: 0, 
+    active_flows: 0, 
+    port_utilization: 0,
+    devices: {
+      plc: { pps: 0, history: [] },
+      sensor: { pps: 0, history: [] },
+      attacker: { pps: 0, history: [] },
+      factory_switch: { pps: 0, history: [] }
+    }
+  },
   security: { attacks_detected_hour: 0, attacks_blocked_hour: 0, false_positives_hour: 0, defense_success_rate: 100, avg_response_time_ms: 0, blocked_traffic_pps: 0 },
   ai: { risk_model_accuracy: null, risk_model_f1_score: null, rl_avg_reward: 0, predictions_per_second: 0, decision_latency_ms: 0 },
   system: { cpu_usage_percent: 0, memory_usage_mb: 0, uptime_hours: 0, services_healthy: 0, api_requests_per_min: 0 },
@@ -74,8 +64,8 @@ function SvgAreaChart({ data, lines, width = "100%", height = 300 }) {
   if (!data || data.length < 2) {
     return (
       <div
-        style={{ height }}
-        className="flex items-center justify-center text-slate-500 text-sm"
+        style={{ height, color: COLORS.text.tertiary }}
+        className="flex items-center justify-center text-sm"
       >
         No historical data yet — collecting…
       </div>
@@ -109,13 +99,11 @@ function SvgAreaChart({ data, lines, width = "100%", height = 300 }) {
   const areaD = (key) =>
     `${pathD(key)} L${xScale(data.length - 1)},${yScale(0)} L${xScale(0)},${yScale(0)} Z`;
 
-  // Y-axis labels
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({
     v: minV + t * (maxV - minV),
     y: yScale(minV + t * (maxV - minV)),
   }));
 
-  // X-axis labels (show every ~6th)
   const step = Math.max(Math.ceil(data.length / 6), 1);
   const xLabels = data
     .map((d, i) => ({ label: d.timestamp, x: xScale(i), show: i % step === 0 }))
@@ -132,25 +120,22 @@ function SvgAreaChart({ data, lines, width = "100%", height = 300 }) {
         ))}
       </defs>
 
-      {/* Grid */}
       {yTicks.map((t, i) => (
         <g key={i}>
           <line
             x1={PAD.left} y1={t.y} x2={PAD.left + iW} y2={t.y}
-            stroke="rgba(255,255,255,0.06)" strokeWidth={1}
+            stroke={withAlpha(COLORS.text.primary, '10')} strokeWidth={1}
           />
-          <text x={PAD.left - 6} y={t.y + 4} textAnchor="end" fill="#64748b" fontSize={11}>
+          <text x={PAD.left - 6} y={t.y + 4} textAnchor="end" fill={COLORS.text.tertiary} fontSize={11}>
             {formatYValue(t.v)}
           </text>
         </g>
       ))}
 
-      {/* Areas */}
       {lines.map((l) => (
         <path key={`area-${l.key}`} d={areaD(l.key)} fill={`url(#grad-${l.key})`} />
       ))}
 
-      {/* Lines */}
       {lines.map((l) => (
         <path
           key={`line-${l.key}`}
@@ -163,32 +148,28 @@ function SvgAreaChart({ data, lines, width = "100%", height = 300 }) {
         />
       ))}
 
-      {/* X-axis labels */}
       {xLabels.map((x, i) => (
         <text 
           key={i} 
           x={x.x} 
           y={H - 12} 
           textAnchor="middle" 
-          fill="#64748b" 
+          fill={COLORS.text.tertiary} 
           fontSize={10}
         >
           {x.label}
         </text>
       ))}
 
-      {/* Legend */}
       {lines.map((l, i) => (
         <g key={`leg-${i}`} transform={`translate(${W - PAD.right - lines.length * 100 + i * 100}, ${PAD.top - 10})`}>
           <rect x={0} y={-10} width={12} height={4} fill={l.color} rx={2} />
-          <text x={16} y={-6} fill="#94a3b8" fontSize={11}>{l.name}</text>
+          <text x={16} y={-6} fill={COLORS.text.secondary} fontSize={11}>{l.name}</text>
         </g>
       ))}
     </svg>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const [metrics, setMetrics] = useState(null);
@@ -197,7 +178,6 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [attackSummary, setAttackSummary] = useState(null);
-  const [modelF1Score, setModelF1Score] = useState(null);
 
   const { data: wsMetrics, status: wsStatus } = useSDNWebSocket('/metrics');
 
@@ -218,38 +198,24 @@ export default function Dashboard() {
   }, []);
 
   const fetchMetrics = useCallback(async () => {
-    const [metricsRes, summaryRes, modelsRes] = await Promise.allSettled([
+    const [metricsRes, summaryRes] = await Promise.allSettled([
       getDashboardMetrics(),
       getAttackSummary(),
-      getModels(),
     ]);
 
     if (metricsRes.status === 'fulfilled' && metricsRes.value.data) {
       setMetrics(metricsRes.value.data);
       setLastUpdated(new Date());
       setError(null);
-    } else {
-      console.error("Error fetching metrics:", metricsRes.reason);
-      // Don't overwrite existing metrics on transient failures
-      if (!metrics) {
-        setError("Backend not reachable. Retrying...");
-      }
+    } else if (!metrics) {
+      setError("Backend not reachable. Retrying...");
     }
 
     if (summaryRes.status === 'fulfilled' && summaryRes.value.data) {
       setAttackSummary(summaryRes.value.data);
     }
-
-    if (modelsRes.status === 'fulfilled' && modelsRes.value.data) {
-      const nextF1Score = extractF1Score(modelsRes.value.data.risk_ml);
-      if (nextF1Score !== null) {
-        setModelF1Score(nextF1Score);
-        setLastUpdated(new Date());
-      }
-    }
   }, [metrics]);
 
-  // Initial load
   useEffect(() => {
     const initData = async () => {
       setLoading(true);
@@ -259,11 +225,8 @@ export default function Dashboard() {
     initData();
   }, []);
 
-  // WebSocket updates — merge into metrics
   useEffect(() => {
     if (wsMetrics && wsMetrics.type === 'metrics_update') {
-      // WS payload may be partial (just network block from ingest), or full dashboard shape.
-      // Merge it into existing metrics to avoid losing sections.
       setMetrics(prev => {
         const base = prev || DEFAULT_METRICS;
         return {
@@ -281,14 +244,10 @@ export default function Dashboard() {
     }
   }, [wsMetrics]);
 
-  // Fallback polling (5s) when WebSocket is not connected
   useEffect(() => {
     const pollInterval = import.meta.env.VITE_STATUS_POLL_INTERVAL || 5000;
     const interval = setInterval(() => {
-      if (wsStatus !== 'OPEN') {
-        fetchMetrics();
-      }
-      // Refresh history every 30s
+      if (wsStatus !== 'OPEN') fetchMetrics();
     }, pollInterval);
     
     const historyInterval = setInterval(fetchHistory, 30000);
@@ -299,17 +258,18 @@ export default function Dashboard() {
     };
   }, [wsStatus, fetchMetrics, fetchHistory]);
 
-  // Use real metrics or defaults
   const m = metrics || DEFAULT_METRICS;
-  const displayedF1Score = modelF1Score ?? safe(m, 'ai.risk_model_f1_score', null);
 
   if (loading && !metrics) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-400">Connecting to backend...</p>
-          {error && <p className="text-amber-400 text-sm mt-2">{error}</p>}
+          <div 
+            className="w-12 h-12 border-4 rounded-full animate-spin mx-auto mb-4"
+            style={{ borderColor: withAlpha(COLORS.accent.cyan, '20'), borderTopColor: COLORS.accent.cyan }}
+          ></div>
+          <p style={{ color: COLORS.text.secondary }}>Connecting to Industrial Control Plane...</p>
+          {error && <p style={{ color: COLORS.status.warning }} className="text-sm mt-2">{error}</p>}
         </div>
       </div>
     );
@@ -321,36 +281,35 @@ export default function Dashboard() {
       value: `${safe(m, 'network.packet_rate_pps').toLocaleString()} pps`,
       subtitle: `${safe(m, 'network.byte_rate_mbps')} MB/s`,
       icon: Network,
-      textColor: "text-blue-400",
-      borderColor: "border-blue-500/30",
-      bgColor: "bg-blue-500/10",
+      color: COLORS.accent.cyan,
     },
     {
-      title: "Security",
+      title: "Security Status",
       value: `${attackSummary?.blocked || safe(m, 'security.attacks_blocked_hour')}/${attackSummary?.total_attacks || safe(m, 'security.attacks_detected_hour')}`,
-      subtitle: `${safe(m, 'security.defense_success_rate', 100).toFixed(0)}% Success Rate`,
+      subtitle: `${safe(m, 'security.defense_success_rate', 100).toFixed(0)}% Block Rate`,
       icon: Shield,
-      textColor: "text-green-400",
-      borderColor: "border-green-500/30",
-      bgColor: "bg-green-500/10",
+      color: COLORS.status.success,
     },
     {
-      title: "AI Engine",
+      title: "AI Inference",
       value: `${safe(m, 'ai.predictions_per_second').toLocaleString()} pred/s`,
       subtitle: `${(safe(m, 'ai.decision_latency_ms')).toFixed(3)}ms latency`,
       icon: Brain,
-      textColor: "text-purple-400",
-      borderColor: "border-purple-500/30",
-      bgColor: "bg-purple-500/10",
+      color: COLORS.status.warning,
     },
     {
       title: "System Health",
-      value: `${safe(m, 'system.services_healthy', 0)}/${safe(m, 'system.total_services', 3)} Active`,
-      subtitle: `${safe(m, 'system.cpu_usage_percent').toFixed(1)}% CPU • ${Math.round(safe(m, 'system.memory_usage_mb'))} MB RAM`,
+      value: `${safe(m, 'system.services_healthy', 0)}/${safe(m, 'system.total_services', 3)} Up`,
+      subtitle: `${safe(m, 'system.cpu_usage_percent').toFixed(1)}% CPU Load`,
       icon: Cpu,
-      textColor: "text-cyan-400",
-      borderColor: "border-cyan-500/30",
-      bgColor: "bg-cyan-500/10",
+      color: COLORS.status.online || COLORS.status.success,
+    },
+    {
+      title: "Defence Latency",
+      value: `${safe(m, 'security.avg_response_time_ms').toFixed(2)}ms`,
+      subtitle: "Avg mitigation response time",
+      icon: Zap,
+      color: COLORS.status.danger,
     },
   ];
 
@@ -359,57 +318,49 @@ export default function Dashboard() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-          <p className="text-slate-400">Real-time SDN-EDR metrics and threat monitoring</p>
+          <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter">NETWORK COMMAND CENTER</h1>
+          <p style={{ color: COLORS.text.secondary }}>Industrial SDN-EDR Real-time Telemetry</p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Connection status indicator */}
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${wsStatus === 'OPEN' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+        <div className="flex items-center gap-4">
+          <div 
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest border"
+            style={{ 
+              backgroundColor: withAlpha(wsStatus === 'OPEN' ? COLORS.status.success : COLORS.status.warning, '10'),
+              color: wsStatus === 'OPEN' ? COLORS.status.success : COLORS.status.warning,
+              borderColor: withAlpha(wsStatus === 'OPEN' ? COLORS.status.success : COLORS.status.warning, '20')
+            }}
+          >
             <span className="relative flex h-2 w-2">
               <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${wsStatus === 'OPEN' ? 'bg-green-400' : 'bg-amber-400'}`}></span>
               <span className={`relative inline-flex rounded-full h-2 w-2 ${wsStatus === 'OPEN' ? 'bg-green-500' : 'bg-amber-500'}`}></span>
             </span>
-            {wsStatus === 'OPEN' ? 'Live' : 'Polling'}
+            {wsStatus === 'OPEN' ? 'LIVE LINK' : 'POLLING MODE'}
           </div>
           {lastUpdated && (
-            <span className="text-xs text-slate-500">
-              {lastUpdated.toLocaleTimeString()}
+            <span className="text-xs font-mono" style={{ color: COLORS.text.tertiary }}>
+              T: {lastUpdated.toLocaleTimeString()}
             </span>
           )}
         </div>
       </div>
 
-      {/* Error banner */}
-      {error && (
-        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          {error}
-        </div>
-      )}
-
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.title} className={`border ${card.borderColor} hover:border-opacity-100 transition-all duration-300`}>
+            <Card key={card.title} style={{ borderColor: withAlpha(card.color, '30') }} className="hover:border-opacity-100 transition-all duration-300">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div className={`p-3 rounded-lg ${card.bgColor}`}>
-                    <Icon className={`w-6 h-6 ${card.textColor}`} />
+                  <div className="p-3 rounded-lg" style={{ backgroundColor: withAlpha(card.color, '10') }}>
+                    <Icon className="w-6 h-6" style={{ color: card.color }} />
                   </div>
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/40 border border-slate-700/50">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Now</span>
-                  </div>
+                  <Badge variant="outline" className="border-dashed opacity-50" style={{ color: COLORS.text.tertiary }}>LIVE</Badge>
                 </div>
-                <div className="space-y-2">
-                  <p className="text-slate-400 text-sm font-medium">{card.title}</p>
-                  <p className={`text-2xl font-bold ${card.textColor}`}>{card.value}</p>
-                  <p className="text-slate-500 text-xs">{card.subtitle}</p>
+                <div className="space-y-1">
+                  <p className="text-xs font-black uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>{card.title}</p>
+                  <p className="text-2xl font-black" style={{ color: card.color }}>{card.value}</p>
+                  <p className="text-xs font-medium" style={{ color: COLORS.text.tertiary }}>{card.subtitle}</p>
                 </div>
               </CardContent>
             </Card>
@@ -417,21 +368,15 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* SVG Area Chart */}
-      <Card className="border-blue-500/20">
+
+      {/* Main Performance Chart */}
+      <Card style={{ borderColor: withAlpha(COLORS.accent.cyan, '20') }}>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-400" />
-              Network Performance (24h)
+            <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-widest" style={{ color: COLORS.text.secondary }}>
+              <TrendingUp className="w-4 h-4" style={{ color: COLORS.accent.cyan }} />
+              Telemetry Throughput Analysis (24H)
             </CardTitle>
-            <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase tracking-wider">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-500"></span>
-              </span>
-              Real-time
-            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -439,63 +384,15 @@ export default function Dashboard() {
             data={history}
             height={300}
             lines={[
-              { key: "pps", color: "#3b82f6", name: "Packets/sec" },
-              { key: "bytes_per_sec", color: "#10b981", name: "MB/s" },
+              { key: "pps", color: COLORS.accent.cyan, name: "PPS RATE" },
+              { key: "bytes_per_sec", color: COLORS.status.success, name: "MB/S RATE" },
             ]}
           />
         </CardContent>
       </Card>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-green-500/20">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-green-500/10">
-                <Shield className="w-6 h-6 text-green-400" />
-              </div>
-              <div>
-                <p className="text-slate-400 text-sm">Attacks Blocked</p>
-                <p className="text-2xl font-bold text-green-400">
-                  {attackSummary?.blocked || safe(m, 'security.attacks_blocked_hour')}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="border-purple-500/20">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-purple-500/10">
-                <Brain className="w-6 h-6 text-purple-400" />
-              </div>
-              <div>
-                <p className="text-slate-400 text-sm">Model F1 Score</p>
-                <p className="text-2xl font-bold text-purple-400">
-                  {formatPercentMetric(displayedF1Score)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-cyan-500/20">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-cyan-500/10">
-                <Zap className="w-6 h-6 text-cyan-400" />
-              </div>
-              <div>
-                <p className="text-slate-400 text-sm">Response Time</p>
-                <p className="text-2xl font-bold text-cyan-400">
-                  {safe(m, 'security.avg_response_time_ms').toFixed(2)}ms
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
+
